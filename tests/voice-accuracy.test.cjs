@@ -1,0 +1,14 @@
+const test=require('node:test'),assert=require('node:assert/strict');
+const {words}=require('../dist/bank');
+const {SpeechLedger,speechMatches,SurvivalEngine}=require('../dist/engine');
+const numbers=ns=>ns.map((n,i)=>({id:i+1,y:.2+i*.1,q:{id:'n'+n,kind:'numbers',answer:String(n),prompt:words(n)}}));
+const letters=s=>[...s].map((answer,i)=>({id:i+1,q:{kind:'letters',answer}}));
+test('number homophones returned by dictation defeat their actual number targets',()=>{for(const [heard,answer]of[['for',4],['to',2],['too',2],['won',1],['ate',8],['oh',0]]){const engine=new SurvivalEngine({pool:[numbers([answer])[0].q],control:'voice',initial:1});const matches=new SpeechLedger().take(heard,engine.enemies,words,{final:true});assert.equal(matches.length,1,heard);assert.equal(engine.submit(matches[0].answer,{partial:false,targetId:matches[0].id}).type,'kill');}});
+test('homophones in a compound number remain atomic and cannot hit its components',()=>{assert.deepEqual(speechMatches('twenty for',numbers([24,20,4]),words).map(m=>m.answer),['24']);assert.equal(speechMatches('one hundred and too',numbers([1,100,2]),words).length,0);assert.deepEqual(speechMatches('won hundred and ate',numbers([108]),words).map(m=>m.answer),['108']);});
+test('letter-only dictation accepts explicit acronyms and conventional letter-name spellings',()=>{assert.deepEqual(speechMatches('ABC',letters('ABC'),words,{lettersOnly:true}).map(m=>m.answer),['A','B','C']);assert.deepEqual(speechMatches('es',letters('S'),words).map(m=>m.answer),['S']);});
+test('letter expansion never turns a lowercase vocabulary word into letter attacks',()=>{assert.equal(speechMatches('cat',letters('CAT'),words).length,0);const mixed=[...letters('CAT'),{id:8,q:{kind:'words',answer:'CAT'}}];assert.deepEqual(speechMatches('CAT',mixed,words).map(m=>m.answer),['CAT']);});
+test('homophone revisions and final callbacks do not replay a completed number attack',()=>{const ledger=new SpeechLedger();assert.equal(ledger.take('for',numbers([4]),words,{stable:true}).length,1);assert.equal(ledger.take('four',numbers([4]),words,{final:true}).length,0);assert.equal(ledger.take('4',numbers([4]),words,{final:true}).length,0);});
+
+test('literal vocabulary wins over a homophone interpretation when both targets are active',()=>{const active=[...numbers([4]),{id:9,y:0,q:{kind:'words',answer:'FOR'}}];assert.deepEqual(speechMatches('for',active,words).map(m=>m.answer),['FOR']);assert.equal(speechMatches('four',numbers([5]),words).length,0);});
+test('provider-formatted 1,000 is one complete target, never 1 and 0',()=>{assert.deepEqual(speechMatches('1,000',numbers([1000,1,0]),words).map(m=>m.answer),['1000']);});
+test('spoken decimal and signed numeric transcripts cannot hit whole-number components',()=>{for(const heard of['three point five','-5'])assert.equal(speechMatches(heard,numbers([3,5]),words).length,0,heard);});
