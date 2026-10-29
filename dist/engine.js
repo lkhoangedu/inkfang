@@ -10,27 +10,31 @@ const norm=s=>String(s).toUpperCase().replace(/[^A-Z0-9]/g,'');
 // slowly but never hold up the swarm, which keeps its own rhythm around them.
 const MONSTERS={
  wisp:{name:'Ghost',hp:1,speed:1,points:10,symbol:'ink-wisp',color:'#a2d6cc',blurb:'Floats at the swarm pace. One answer.'},
- scout:{name:'Bat',hp:1,speed:1.5,points:14,symbol:'ink-scout',color:'#e8c47a',blurb:'Fast flier. Swerves past slower monsters.'},
+ scout:{name:'Bat',hp:1,speed:1.5,points:14,symbol:'ink-scout',color:'#e8c47a',wind:.11,windFreq:2.4,blurb:'Fast flier on a winding path. Swerves past slower monsters.'},
  brute:{name:'Stone Golem',hp:3,speed:.62,points:28,symbol:'ink-brute',color:'#b7b0cf',blurb:'Slow and armoured. Three answers.'},
- shade:{name:'Vampire',hp:2,speed:1.05,points:22,symbol:'ink-shade',color:'#c4b6e9',enrage:1.45,blurb:'Two answers. Flees faster once wounded.'},
+ shade:{name:'Vampire',hp:2,speed:1.05,points:22,symbol:'ink-shade',color:'#c4b6e9',enrage:1.45,wind:.07,windFreq:1.6,blurb:'Two answers. Weaves, and flees faster once wounded.'},
  healer:{name:'Life Spirit',hp:1,speed:.8,points:12,symbol:'ink-healer',color:'#ff9678',blurb:'Gentle drifter. Defeat it for a heart.'},
  spark:{name:'Ember Sprite',hp:1,speed:.5,accel:1.3,points:18,symbol:'ink-spark',color:'#ff8c5a',blurb:'Starts slow, then races for the line.'},
  boss:{name:'The Ink Colossus',hp:12,speed:.22,points:180,symbol:'ink-boss',color:'#f1a56d',boss:true,theme:'colossus',blurb:'A slow stone titan. Twelve answers.'},
- harpy:{name:'The Night Harpy',hp:7,speed:.5,points:160,symbol:'ink-harpy',color:'#9fb7e8',boss:true,theme:'harpy',blurb:'A quick winged boss. Seven answers.'},
+ harpy:{name:'The Night Harpy',hp:7,speed:.5,points:160,symbol:'ink-harpy',color:'#9fb7e8',boss:true,theme:'harpy',wind:.1,windFreq:1.3,blurb:'A quick winged boss on a winding path. Seven answers.'},
  weaver:{name:'The Bone Weaver',hp:10,speed:.28,points:200,symbol:'ink-weaver',color:'#e0dcc6',boss:true,theme:'weaver',enrage:1.6,enrageAt:3,blurb:'Ten answers. Scuttles faster when nearly beaten.'},
  kraken:{name:'The Deep Kraken',hp:15,speed:.2,points:240,symbol:'ink-kraken',color:'#7fc8c0',boss:true,theme:'kraken',pressure:.75,blurb:'Fifteen answers. The swarm arrives faster while it lives.'}
 };
 const BOSS_ORDER=['boss','harpy','weaver','kraken'];
 const bossFor=stage=>BOSS_ORDER[(Math.max(1,stage)-1)%BOSS_ORDER.length];
+// Orbs occasionally dropped by defeated monsters. They fall to the hero and trigger on arrival.
+const DROPS={ice:{name:'Frost Orb',duration:5,factor:.5,chance:.09},fire:{name:'Ember Orb',ticks:3,interval:1.5,chance:.07}};
 const SKILLS={slow:{name:'Slowfield',cost:3,duration:7},freeze:{name:'Frostlock',cost:4,duration:4},double:{name:'Twin Strike',cost:5,charges:4},chain:{name:'Chain Lightning',cost:6,charges:4},nova:{name:'Inkstorm',cost:10}};
 const answersFor=q=>[...new Set([q.answer,...(q.acceptedAnswers||[])].map(norm).filter(Boolean))];
 // Effective movement rate of one monster right now.
+// Sideways drift of a winding flier at its current height (fraction of the arena width).
+function swayOf(e){const a=MONSTERS[e.type]||MONSTERS.wisp;return a.wind?Math.sin((e.phase||0)+Math.max(-.2,e.y)*a.windFreq*2*Math.PI)*a.wind:0}
 function paceOf(e){const a=MONSTERS[e.type]||MONSTERS.wisp;let speed=a.speed;if(a.accel)speed+=a.accel*Math.max(0,Math.min(1,e.y));if(a.enrage&&e.hp<(a.enrageAt?a.enrageAt+1:e.maxHp))speed*=a.enrage;return speed;}
 class SurvivalEngine{
 constructor({pool,speed='steady',duration=300,control='type',initial=null,progressive=true,rng=Math.random,onEvent=()=>{}}){
  if(!pool?.length)throw Error('A question pool is required.');
  Object.assign(this,{pool,control,duration,rng,onEvent,progressive});this.speed=paceFor(speed,control);this.travelScale=1;this.maxLevel=Math.min(3,Math.max(...pool.map(q=>Number(q.level)||1)));this.voiceReady=true;
- this.enemies=[];this.elapsed=0;this.spawnClock=0;this.score=0;this.combo=0;this.bestCombo=0;this.kills=0;this.hits=0;this.bossKills=0;this.lives=2;this.maxLives=5;this.mana=0;this.maxMana=10;this.serial=0;this.lastBossStage=0;this.freezeUntil=0;this.slowUntil=0;this.doubleCharges=0;this.chainCharges=0;
+ this.enemies=[];this.elapsed=0;this.spawnClock=0;this.score=0;this.combo=0;this.bestCombo=0;this.kills=0;this.hits=0;this.bossKills=0;this.lives=2;this.maxLives=5;this.mana=0;this.maxMana=10;this.serial=0;this.lastBossStage=0;this.freezeUntil=0;this.slowUntil=0;this.iceUntil=0;this.doubleCharges=0;this.chainCharges=0;this.drops=[];this.dropSerial=0;
  this.baseSpacing=pool.some(q=>(q.display||q.prompt||'').length>40)?.42:.3;this.spacing=this.baseSpacing;this.over=false;this.review=[];this.recent=[];
  this.spawn(.22,{type:'wisp'});for(let i=1;i<(initial??(control==='voice'?1:2));i++)this.spawn(.12-(i-1)*.1,{type:'wisp'});
 }
@@ -38,6 +42,8 @@ get wave(){return 1+Math.floor(this.elapsed/20)}
 get level(){return this.progressive?Math.min(this.maxLevel,1+Math.floor((this.wave-1)/2)):this.maxLevel}
 get multiplier(){return Math.min(this.control==='voice'?1.4:2,1+(this.wave-1)*(this.control==='voice'?.06:.1))}
 get boss(){return this.enemies.find(e=>e.boss)||null}
+// The swarm grows with the waves: three monsters at first, one more per wave, up to the pace's cap.
+get cap(){return this.control==='voice'?this.speed.cap:Math.min(this.speed.cap,2+this.wave)}
 // Effective travel time. Short arenas (phones with browser bars) grant up to 35% more time so reaction room matches a tall screen.
 get travel(){return this.speed.travel*this.travelScale}
 setArenaHeight(px){this.travelScale=Number.isFinite(px)&&px>0?Math.max(1,Math.min(1.35,520/px)):1;return this.travelScale}
@@ -53,34 +59,39 @@ nextType(){if(this.wave>=2&&(this.serial+1)%9===0&&!this.enemies.some(e=>e.type=
 // Ordinary monsters keep a readable gap within their lane; bosses live on their own centre layer.
 laneBlocked(lane,y,ignore=null){return this.enemies.some(e=>e!==ignore&&!e.boss&&e.lane===lane&&Math.abs(e.y-y)<this.spacing)}
 spawn(y=-.12,{type=null}={}){
- if(this.enemies.length>=this.speed.cap)return false;type=type||this.nextType();const archetype=MONSTERS[type]||MONSTERS.wisp;
+ if(this.enemies.length>=this.cap)return false;type=type||this.nextType();const archetype=MONSTERS[type]||MONSTERS.wisp;
  const q=this.questionFor();if(!q)return false;
  let lane;if(archetype.boss){if(this.boss)return false;lane=2}else{const counts=[0,1].map(l=>this.enemies.filter(e=>!e.boss&&e.lane===l&&e.y<.22).length);const front=l=>this.enemies.filter(e=>!e.boss&&e.lane===l&&e.y>=y).sort((a,b)=>a.y-b.y)[0];
   // Prefer the lane whose nearest monster will not hold this one up, then the emptier lane.
   const order=[0,1].sort((a,b)=>{const fa=front(a),fb=front(b);const sa=fa?Math.min(1,paceOf(fa)/archetype.speed):2,sb=fb?Math.min(1,paceOf(fb)/archetype.speed):2;return sb-sa||counts[a]-counts[b]||((this.serial%2===a)?-1:1)});
   lane=order.find(l=>!this.laneBlocked(l,y));if(lane===undefined)return false;}
  const stageBonus=archetype.boss?2*Math.floor((Math.max(1,Math.floor(this.wave/4))-1)/BOSS_ORDER.length):0,hp=archetype.hp+stageBonus;
- const enemy={id:++this.serial,q,type,name:archetype.name,boss:!!archetype.boss,lane,y,hp,maxHp:hp,speed:archetype.speed,revision:0,locked:new Set(),damage:0,switched:-9};this.remember(q);this.enemies.push(enemy);this.onEvent({type:'spawn',enemy});return enemy;
+ const enemy={id:++this.serial,q,type,name:archetype.name,boss:!!archetype.boss,lane,y,hp,maxHp:hp,speed:archetype.speed,revision:0,locked:new Set(),damage:0,switched:-9,phase:this.rng()*Math.PI*2,sway:0};this.remember(q);this.enemies.push(enemy);this.onEvent({type:'spawn',enemy});return enemy;
 }
 update(dt){
- if(this.over||!Number.isFinite(dt)||dt<=0||(this.control==='voice'&&!this.voiceReady))return;const before=this.elapsed;this.elapsed+=dt;const motionDt=Math.max(0,this.elapsed-Math.max(before,this.freezeUntil)),slow=this.elapsed<this.slowUntil?.45:1;
+ if(this.over||!Number.isFinite(dt)||dt<=0||(this.control==='voice'&&!this.voiceReady))return;const before=this.elapsed;this.elapsed+=dt;const motionDt=Math.max(0,this.elapsed-Math.max(before,this.freezeUntil)),slow=Math.min(this.elapsed<this.slowUntil?.45:1,this.elapsed<this.iceUntil?DROPS.ice.factor:1);
  const ordered=[...this.enemies].sort((a,b)=>b.y-a.y),moved=[];
- for(const e of ordered){const pace=paceOf(e);e.speed=pace;e.y+=motionDt/this.travel*this.multiplier*pace*slow;
+ for(const e of ordered){const pace=paceOf(e);e.speed=pace;e.y+=motionDt/this.travel*this.multiplier*pace*slow;e.sway=swayOf(e);
   if(!e.boss){let blocker=null;for(const front of moved)if(motionDt&&!front.boss&&front.lane===e.lane&&e.y>front.y-this.spacing){blocker=front;e.y=Math.min(e.y,front.y-this.spacing)}
    // A clearly faster monster swerves into the free lane instead of queueing behind a slow one.
    if(blocker&&pace>paceOf(blocker)*1.15&&this.elapsed-e.switched>2&&!this.laneBlocked(1-e.lane,e.y,e)){e.lane=1-e.lane;e.switched=this.elapsed;this.onEvent({type:'swerve',enemy:e})}}
   moved.push(e);
   if(e.y>=.91){if(!motionDt)continue;if(this.control==='voice'){e.y=.91;e.lineWait=(e.lineWait||0)+motionDt;if(e.lineWait<1.4)continue}this.enemies=this.enemies.filter(m=>m!==e);this.lives--;this.combo=0;this.review.push({...e.q,outcome:'escaped'});this.onEvent({type:'escape',enemy:e});if(this.lives<=0){this.finish('hearts');return}}
  }
+ this.updateDrops(dt);this.updateBurns();if(this.over)return;
  const stage=Math.floor(this.wave/4);if(motionDt&&stage>this.lastBossStage&&!this.boss){if(this.spawn(-.2,{type:bossFor(stage)}))this.lastBossStage=stage}
  const pressure=this.boss?(MONSTERS[this.boss.type].pressure||1):1;
  this.spawnClock+=motionDt*slow;const interval=this.speed.spawn/this.multiplier*pressure;if(motionDt&&stage<=this.lastBossStage&&this.spawnClock>=interval)this.spawnClock=this.spawn()?0:Math.max(0,interval-.2);
  if(this.duration&&this.elapsed>=this.duration)this.finish('time');
 }
+updateDrops(dt){for(const d of [...this.drops]){d.y+=dt*.5;if(d.y>=.9){this.drops=this.drops.filter(x=>x!==d);this.collect(d)}}}
+collect(d){if(d.kind==='ice')this.iceUntil=this.elapsed+DROPS.ice.duration;else for(const e of this.enemies){e.burnTicks=DROPS.fire.ticks;e.burnNext=this.elapsed+.4}this.onEvent({type:'collect',drop:d})}
+updateBurns(){for(const e of [...this.enemies]){if(!e.burnTicks||this.elapsed<e.burnNext)continue;e.burnTicks--;e.burnNext=this.elapsed+DROPS.fire.interval;e.hp=Math.max(0,e.hp-1);this.hits++;if(!e.hp)this.kill(e,{spell:true});else this.onEvent({type:'burn',enemy:e});if(this.over)return}}
 kill(enemy,{spell=false}={}){
  this.enemies=this.enemies.filter(e=>e!==enemy);this.kills++;this.combo++;this.bestCombo=Math.max(this.bestCombo,this.combo);if(enemy.boss)this.bossKills++;
  const points=MONSTERS[enemy.type].points+Math.min(this.combo-1,10)*2;this.score+=points;
  // Only answer-earned kills charge mana, preventing a spell from recharging itself.
+ if(!spell&&!enemy.boss&&this.wave>=2){const roll=this.rng();const kind=roll<DROPS.ice.chance?'ice':roll<DROPS.ice.chance+DROPS.fire.chance?'fire':null;if(kind){const drop={id:++this.dropSerial,kind,lane:enemy.lane,y:enemy.y,sway:enemy.sway||0};this.drops.push(drop);this.onEvent({type:'drop',drop})}}
  if(!spell){const before=this.mana;this.mana=Math.min(this.maxMana,this.mana+1);if(this.mana===3&&!this.skillIntro){this.skillIntro=true;this.onEvent({type:'mana-ready',skill:'slow'})}if(before<10&&this.mana===10)this.onEvent({type:'mana-ready',skill:'nova'})}
  if(enemy.damage)this.review.push({...enemy.q,outcome:'recovered'});
  if(enemy.type==='healer'){const before=this.lives;this.lives=Math.min(this.maxLives,this.lives+1);this.onEvent({type:'heart',enemy,gained:this.lives-before})}
@@ -159,5 +170,5 @@ take(text,enemies,words,options){const matches=this.peek(text,enemies,words,opti
 // Complete answers fire at once; these are the only waits (ms): a complete answer that could still grow, and a partial check.
 const TYPING_WAITS={prefix:160,partial:120};
 function typingPlan(value,enemies){const raw=String(value).trim(),answer=norm(raw);if(!answer)return{delay:null,reason:'empty'};const eligible=enemies.filter(e=>e.q.kind!=='numbers'||/^\d+$/.test(raw));const variants=eligible.flatMap(e=>answersFor(e.q));const exact=variants.includes(answer),longer=variants.some(v=>v.startsWith(answer)&&v.length>answer.length);if(exact)return{delay:longer?TYPING_WAITS.prefix:0,reason:longer?'ambiguous-prefix':'complete'};if(longer)return{delay:null,reason:'incomplete'};return{delay:TYPING_WAITS.partial,reason:'check-partial'};}
-root.InkEngine={SurvivalEngine,MONSTERS,BOSS_ORDER,bossFor,paceOf,SKILLS,answersFor,SPEEDS,VOICE_SPEEDS,paceFor,norm,speechMatches,speechUnits,SpeechLedger,typingPlan,TYPING_WAITS};if(typeof module!=='undefined')module.exports=root.InkEngine;
+root.InkEngine={SurvivalEngine,MONSTERS,DROPS,BOSS_ORDER,bossFor,paceOf,swayOf,SKILLS,answersFor,SPEEDS,VOICE_SPEEDS,paceFor,norm,speechMatches,speechUnits,SpeechLedger,typingPlan,TYPING_WAITS};if(typeof module!=='undefined')module.exports=root.InkEngine;
 })(typeof window!=='undefined'?window:globalThis);

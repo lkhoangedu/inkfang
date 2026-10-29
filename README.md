@@ -15,9 +15,9 @@ Every monster carries its own sign: the target box sits on the monster's body, g
 | Monster | HP | Relative movement | Behaviour |
 | --- | ---: | ---: | --- |
 | Ghost | 1 | 1× | First enemies; one complete answer defeats one. |
-| Bat | 1 | 1.5× | Fast tier from wave 2. Swerves into the free lane to pass slower monsters. |
+| Bat | 1 | 1.5× | Fast tier from wave 2. Flies a winding path and swerves into the free lane to pass slower monsters. |
 | Stone Golem | 3 | 0.62× | Slow armoured tier from wave 3; each correct hit reveals a fresh question. |
-| Vampire | 2 | 1.05× → 1.52× | From wave 4. Flees faster once wounded. |
+| Vampire | 2 | 1.05× → 1.52× | From wave 4. Weaves sideways and flees faster once wounded. |
 | Life Spirit | 1 | 0.8× | Occasional heart carrier from wave 2; grants one heart on defeat. |
 | Ember Sprite | 1 | 0.5× → 1.8× | From wave 5. Starts slowly and accelerates as it falls. |
 
@@ -26,13 +26,19 @@ Four bosses rotate, one every fourth wave, each with its own theme music. After 
 | Boss | HP | Relative movement | Twist |
 | --- | ---: | ---: | --- |
 | The Ink Colossus | 12 | 0.22× | Slow stone titan. |
-| The Night Harpy | 7 | 0.5× | A quick boss: fewer answers, less time. |
+| The Night Harpy | 7 | 0.5× | A quick boss on a winding path: fewer answers, less time. |
 | The Bone Weaver | 10 | 0.28× → 0.45× | Scuttles faster once down to three HP. |
 | The Deep Kraken | 15 | 0.2× | Ordinary monsters arrive 25% faster while it lives. |
 
 Players start with **two hearts**, with a maximum of five. Every escaped monster costs one. A Life Spirit defeated by a spell can also grant a heart. Bosses live on their own centre layer behind the swarm: they never hold up ordinary monsters and never block spawning. Within a lane, ordinary monsters keep a readable gap; a clearly faster monster (at least 15% faster than the one in front) swerves into the other lane when it is free, at most once every two seconds. New arrivals prefer the lane whose nearest monster will not slow them down.
 
 On a short arena (under 520 px tall, typically a phone with browser bars showing) monsters receive up to 35% more travel time, so reaction room matches a tall screen. The HUD and footer also switch to a compact layout on short viewports, and the page can be added to the Home Screen (iOS: Share → Add to Home Screen; Android: Install app) to run without browser bars; `manifest.webmanifest` and the PNG icons support this.
+
+The swarm grows with the waves: the active cap is 2 + wave (three monsters in wave 1), never above the pace's own cap; Speak mode keeps its fixed small caps. Winding fliers drift sideways by up to 11% of the arena width around their lane.
+
+**Orbs.** From wave 2, an ordinary monster defeated by an answer has a 9% chance to drop a Frost Orb and a 7% chance to drop an Ember Orb. The orb falls to the hero and triggers on arrival: Frost halves the swarm's movement and arrival rate for five seconds (stacking with Slowfield by taking the stronger slow); Ember burns every monster on the field three times, one HP every 1.5 seconds, bosses included. Burn kills score points but, like spell kills, do not charge mana or drop orbs. Bosses never drop orbs.
+
+**Scenes.** Each match picks one of five backdrops (graveyard, forest, library, harbour, cavern), never the same as the previous match.
 
 Waves last 20 seconds. With question progression enabled, levels 1, 2 and 3 unlock at 0, 40 and 80 seconds, within the selected number / word ceiling. Harder unlocked questions are favoured while some easier ones remain. Progression can be disabled in Fine-tune. Multi-hit enemies keep their body and position, reset partial letter marks, lose HP and reveal a different prompt after every surviving hit. If a tiny custom pool has no unused prompt, a different prompt already on another monster can be reused; add more words for variety.
 
@@ -52,9 +58,12 @@ Twin Strike and Chain Lightning can coexist if enough mana is earned. Secondary 
 
 ## Music that escalates with the swarm
 
-There are three original synthesized swarm tracks and four boss themes, all generated locally; no audio files or licensed recordings are downloaded. *Dawn Patrol* plays for waves 1–3, *Swarm Season* from wave 4 and *Ink Frenzy* from wave 8, each with a denser drum pattern and a higher base tempo than the last. Track changes land on the next bar with a short riser so the groove never stutters. When a boss enters, its own theme takes over (*Stone March*, *Night Wings*, *Web of Bones*, *Deep Current*) after a drum sting, and the swarm track returns when it is defeated. On top of that, tempo follows the actual monster travel speed, including mode and wave acceleration, from 66 to 172 BPM.
+Four original synthesized swarm tracks (*Lantern Walk*, *Ink March*, *Ghost Carnival*, *Thunder Run*) and four boss themes are generated locally; no audio files or licensed recordings are downloaded. Each track has its own instruments and groove. A match starts on a different track from the previous match, and the track moves on every two waves, so the first minute already sounds different from the last run. Track changes land on the next bar with a short riser. When a boss enters, its own theme takes over (*Stone March*, *Night Wings*, *Web of Bones*, *Deep Current*) after a drum sting, and the swarm track returns when it is defeated. Tempo follows the actual monster travel speed, including mode and wave acceleration, plus 3 BPM per wave, within 66–176 BPM.
 
 Music and effects have separate toggles, plus a music volume control in Pause. Music starts only after a user action, pauses with play and strongly ducks in Speak mode. Headphones or muting music may further improve microphone recognition.
+## Interface language
+
+The first visit asks for English or Vietnamese; the choice is stored in this browser and can be changed any time with the button beside Play. The language applies to instructions and settings only (setup page, guide captions, help, pause and results screens). Monster prompts, answers, in-game feedback and the Question bank stay in English, because the game practises English. Translations live in `lang.js`.
 
 ## Question bank and personal lists
 
