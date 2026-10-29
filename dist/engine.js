@@ -4,16 +4,28 @@ const SPEEDS={drift:{name:'Drift',travel:22,spawn:4.8,cap:5},steady:{name:'Stead
 const VOICE_SPEEDS={drift:{name:'Drift',travel:36,spawn:7,cap:2},steady:{name:'Steady',travel:24,spawn:5,cap:3},rush:{name:'Rush',travel:18,spawn:3.8,cap:3},blitz:{name:'Blitz',travel:14,spawn:3,cap:4}};
 const paceFor=(speed='steady',control='type')=>({...((control==='voice'?VOICE_SPEEDS:SPEEDS)[speed]||(control==='voice'?VOICE_SPEEDS:SPEEDS).steady)});
 const norm=s=>String(s).toUpperCase().replace(/[^A-Z0-9]/g,'');
+// Movement is relative to the chosen pace. Ordinary monsters have distinct speed tiers:
+// ghosts set the baseline, bats are the fast tier, golems the slow armoured tier, vampires
+// speed up once wounded, ember sprites start slow and accelerate as they fall. Bosses move
+// slowly but never hold up the swarm, which keeps its own rhythm around them.
 const MONSTERS={
- wisp:{name:'Ghost',hp:1,speed:1,points:10,symbol:'ink-wisp'},
- scout:{name:'Bat',hp:1,speed:1.32,points:14,symbol:'ink-scout'},
- brute:{name:'Stone Golem',hp:3,speed:.72,points:28,symbol:'ink-brute'},
- shade:{name:'Vampire',hp:2,speed:1.08,points:22,symbol:'ink-shade'},
- healer:{name:'Life Spirit',hp:1,speed:.85,points:12,symbol:'ink-healer'},
- boss:{name:'The Ink Colossus',hp:12,speed:.22,points:180,symbol:'ink-boss'}
+ wisp:{name:'Ghost',hp:1,speed:1,points:10,symbol:'ink-wisp',color:'#a2d6cc',blurb:'Floats at the swarm pace. One answer.'},
+ scout:{name:'Bat',hp:1,speed:1.5,points:14,symbol:'ink-scout',color:'#e8c47a',blurb:'Fast flier. Swerves past slower monsters.'},
+ brute:{name:'Stone Golem',hp:3,speed:.62,points:28,symbol:'ink-brute',color:'#b7b0cf',blurb:'Slow and armoured. Three answers.'},
+ shade:{name:'Vampire',hp:2,speed:1.05,points:22,symbol:'ink-shade',color:'#c4b6e9',enrage:1.45,blurb:'Two answers. Flees faster once wounded.'},
+ healer:{name:'Life Spirit',hp:1,speed:.8,points:12,symbol:'ink-healer',color:'#ff9678',blurb:'Gentle drifter. Defeat it for a heart.'},
+ spark:{name:'Ember Sprite',hp:1,speed:.5,accel:1.3,points:18,symbol:'ink-spark',color:'#ff8c5a',blurb:'Starts slow, then races for the line.'},
+ boss:{name:'The Ink Colossus',hp:12,speed:.22,points:180,symbol:'ink-boss',color:'#f1a56d',boss:true,theme:'colossus',blurb:'A slow stone titan. Twelve answers.'},
+ harpy:{name:'The Night Harpy',hp:7,speed:.5,points:160,symbol:'ink-harpy',color:'#9fb7e8',boss:true,theme:'harpy',blurb:'A quick winged boss. Seven answers.'},
+ weaver:{name:'The Bone Weaver',hp:10,speed:.28,points:200,symbol:'ink-weaver',color:'#e0dcc6',boss:true,theme:'weaver',enrage:1.6,enrageAt:3,blurb:'Ten answers. Scuttles faster when nearly beaten.'},
+ kraken:{name:'The Deep Kraken',hp:15,speed:.2,points:240,symbol:'ink-kraken',color:'#7fc8c0',boss:true,theme:'kraken',pressure:.75,blurb:'Fifteen answers. The swarm arrives faster while it lives.'}
 };
+const BOSS_ORDER=['boss','harpy','weaver','kraken'];
+const bossFor=stage=>BOSS_ORDER[(Math.max(1,stage)-1)%BOSS_ORDER.length];
 const SKILLS={slow:{name:'Slowfield',cost:3,duration:7},freeze:{name:'Frostlock',cost:4,duration:4},double:{name:'Twin Strike',cost:5,charges:4},chain:{name:'Chain Lightning',cost:6,charges:4},nova:{name:'Inkstorm',cost:10}};
 const answersFor=q=>[...new Set([q.answer,...(q.acceptedAnswers||[])].map(norm).filter(Boolean))];
+// Effective movement rate of one monster right now.
+function paceOf(e){const a=MONSTERS[e.type]||MONSTERS.wisp;let speed=a.speed;if(a.accel)speed+=a.accel*Math.max(0,Math.min(1,e.y));if(a.enrage&&e.hp<(a.enrageAt?a.enrageAt+1:e.maxHp))speed*=a.enrage;return speed;}
 class SurvivalEngine{
 constructor({pool,speed='steady',duration=300,control='type',initial=null,progressive=true,rng=Math.random,onEvent=()=>{}}){
  if(!pool?.length)throw Error('A question pool is required.');
@@ -25,6 +37,7 @@ constructor({pool,speed='steady',duration=300,control='type',initial=null,progre
 get wave(){return 1+Math.floor(this.elapsed/20)}
 get level(){return this.progressive?Math.min(this.maxLevel,1+Math.floor((this.wave-1)/2)):this.maxLevel}
 get multiplier(){return Math.min(this.control==='voice'?1.4:2,1+(this.wave-1)*(this.control==='voice'?.06:.1))}
+get boss(){return this.enemies.find(e=>e.boss)||null}
 questionFor(exclude=[],allowUsed=false){
  const active=new Set([...this.enemies.map(e=>norm(e.q.answer)),...exclude.map(norm)]),eligible=this.pool.filter(q=>!this.progressive||(q.level||1)<=this.level);
  const base=eligible.length?eligible:this.pool;
@@ -33,29 +46,36 @@ questionFor(exclude=[],allowUsed=false){
  const kinds=[...new Set(options.map(q=>q.kind))],kind=kinds[Math.floor(this.rng()*kinds.length)];const same=options.filter(q=>q.kind===kind);return same[Math.floor(this.rng()*same.length)];
 }
 remember(q){this.recent.push(q.id);if(this.recent.length>Math.min(16,Math.floor(this.pool.length/2)))this.recent.shift()}
-nextType(){if(this.wave>=2&&(this.serial+1)%9===0&&!this.enemies.some(e=>e.type==='healer'))return'healer';const roll=this.rng();if(this.wave>=4&&roll<.2)return'shade';if(this.wave>=3&&roll<.5)return'brute';if(this.wave>=2&&roll<.45)return'scout';return'wisp'}
+nextType(){if(this.wave>=2&&(this.serial+1)%9===0&&!this.enemies.some(e=>e.type==='healer'))return'healer';const roll=this.rng();if(this.wave>=5&&roll<.15)return'spark';if(this.wave>=4&&roll<.32)return'shade';if(this.wave>=3&&roll<.55)return'brute';if(this.wave>=2&&roll<.5)return'scout';return'wisp'}
+// Ordinary monsters keep a readable gap within their lane; bosses live on their own centre layer.
+laneBlocked(lane,y,ignore=null){return this.enemies.some(e=>e!==ignore&&!e.boss&&e.lane===lane&&Math.abs(e.y-y)<this.spacing)}
 spawn(y=-.12,{type=null}={}){
  if(this.enemies.length>=this.speed.cap)return false;type=type||this.nextType();const archetype=MONSTERS[type]||MONSTERS.wisp;
  const q=this.questionFor();if(!q)return false;
- const counts=[0,1].map(l=>this.enemies.filter(e=>e.lane===l&&e.y<.22).length),preferred=counts[0]===counts[1]?this.serial%2:counts.indexOf(Math.min(...counts));
- const collides=l=>this.enemies.some(e=>(e.lane===l||e.type==='boss'||type==='boss')&&Math.abs(e.y-y)<this.spacing);
- const lane=type==='boss'?(!collides(2)?2:undefined):[preferred,1-preferred].find(l=>!collides(l));if(lane===undefined)return false;
- const enemy={id:++this.serial,q,type,lane,y,hp:archetype.hp,maxHp:archetype.hp,speed:archetype.speed,revision:0,locked:new Set(),damage:0};this.remember(q);this.enemies.push(enemy);this.onEvent({type:'spawn',enemy});return enemy;
+ let lane;if(archetype.boss){if(this.boss)return false;lane=2}else{const counts=[0,1].map(l=>this.enemies.filter(e=>!e.boss&&e.lane===l&&e.y<.22).length);const front=l=>this.enemies.filter(e=>!e.boss&&e.lane===l&&e.y>=y).sort((a,b)=>a.y-b.y)[0];
+  // Prefer the lane whose nearest monster will not hold this one up, then the emptier lane.
+  const order=[0,1].sort((a,b)=>{const fa=front(a),fb=front(b);const sa=fa?Math.min(1,paceOf(fa)/archetype.speed):2,sb=fb?Math.min(1,paceOf(fb)/archetype.speed):2;return sb-sa||counts[a]-counts[b]||((this.serial%2===a)?-1:1)});
+  lane=order.find(l=>!this.laneBlocked(l,y));if(lane===undefined)return false;}
+ const stageBonus=archetype.boss?2*Math.floor((Math.max(1,Math.floor(this.wave/4))-1)/BOSS_ORDER.length):0,hp=archetype.hp+stageBonus;
+ const enemy={id:++this.serial,q,type,name:archetype.name,boss:!!archetype.boss,lane,y,hp,maxHp:hp,speed:archetype.speed,revision:0,locked:new Set(),damage:0,switched:-9};this.remember(q);this.enemies.push(enemy);this.onEvent({type:'spawn',enemy});return enemy;
 }
 update(dt){
  if(this.over||!Number.isFinite(dt)||dt<=0||(this.control==='voice'&&!this.voiceReady))return;const before=this.elapsed;this.elapsed+=dt;const motionDt=Math.max(0,this.elapsed-Math.max(before,this.freezeUntil)),slow=this.elapsed<this.slowUntil?.45:1;
  const ordered=[...this.enemies].sort((a,b)=>b.y-a.y),moved=[];
- for(const e of ordered){e.y+=motionDt/this.speed.travel*this.multiplier*e.speed*slow;
-  for(const front of moved)if(motionDt&&(front.lane===e.lane||front.type==='boss'||e.type==='boss'))e.y=Math.min(e.y,front.y-this.spacing);
+ for(const e of ordered){const pace=paceOf(e);e.speed=pace;e.y+=motionDt/this.speed.travel*this.multiplier*pace*slow;
+  if(!e.boss){let blocker=null;for(const front of moved)if(motionDt&&!front.boss&&front.lane===e.lane&&e.y>front.y-this.spacing){blocker=front;e.y=Math.min(e.y,front.y-this.spacing)}
+   // A clearly faster monster swerves into the free lane instead of queueing behind a slow one.
+   if(blocker&&pace>paceOf(blocker)*1.15&&this.elapsed-e.switched>2&&!this.laneBlocked(1-e.lane,e.y,e)){e.lane=1-e.lane;e.switched=this.elapsed;this.onEvent({type:'swerve',enemy:e})}}
   moved.push(e);
   if(e.y>=.91){if(!motionDt)continue;if(this.control==='voice'){e.y=.91;e.lineWait=(e.lineWait||0)+motionDt;if(e.lineWait<1.4)continue}this.enemies=this.enemies.filter(m=>m!==e);this.lives--;this.combo=0;this.review.push({...e.q,outcome:'escaped'});this.onEvent({type:'escape',enemy:e});if(this.lives<=0){this.finish('hearts');return}}
  }
- const stage=Math.floor(this.wave/4);if(motionDt&&stage>this.lastBossStage&&!this.enemies.some(e=>e.type==='boss')){if(this.spawn(-.2,{type:'boss'}))this.lastBossStage=stage}
- this.spawnClock+=motionDt*slow;const interval=this.speed.spawn/this.multiplier;if(motionDt&&stage<=this.lastBossStage&&this.spawnClock>=interval)this.spawnClock=this.spawn()?0:Math.max(0,interval-.2);
+ const stage=Math.floor(this.wave/4);if(motionDt&&stage>this.lastBossStage&&!this.boss){if(this.spawn(-.2,{type:bossFor(stage)}))this.lastBossStage=stage}
+ const pressure=this.boss?(MONSTERS[this.boss.type].pressure||1):1;
+ this.spawnClock+=motionDt*slow;const interval=this.speed.spawn/this.multiplier*pressure;if(motionDt&&stage<=this.lastBossStage&&this.spawnClock>=interval)this.spawnClock=this.spawn()?0:Math.max(0,interval-.2);
  if(this.duration&&this.elapsed>=this.duration)this.finish('time');
 }
 kill(enemy,{spell=false}={}){
- this.enemies=this.enemies.filter(e=>e!==enemy);this.kills++;this.combo++;this.bestCombo=Math.max(this.bestCombo,this.combo);if(enemy.type==='boss')this.bossKills++;
+ this.enemies=this.enemies.filter(e=>e!==enemy);this.kills++;this.combo++;this.bestCombo=Math.max(this.bestCombo,this.combo);if(enemy.boss)this.bossKills++;
  const points=MONSTERS[enemy.type].points+Math.min(this.combo-1,10)*2;this.score+=points;
  // Only answer-earned kills charge mana, preventing a spell from recharging itself.
  if(!spell){const before=this.mana;this.mana=Math.min(this.maxMana,this.mana+1);if(this.mana===3&&!this.skillIntro){this.skillIntro=true;this.onEvent({type:'mana-ready',skill:'slow'})}if(before<10&&this.mana===10)this.onEvent({type:'mana-ready',skill:'nova'})}
@@ -95,7 +115,7 @@ submit(value,{partial=true,targetId=null,targetRevision=null}={}){
 castNova(){
  if(this.over||this.mana<this.maxMana||!this.enemies.length)return{type:'unavailable'};this.mana=0;let kills=0,bossDamage=0;
  this.onEvent({type:'nova'});
- for(const e of [...this.enemies]){if(e.type==='boss'){const damage=Math.ceil(e.maxHp/2);e.hp=Math.max(0,e.hp-damage);bossDamage+=damage;if(!e.hp){this.kill(e,{spell:true});kills++}else this.onEvent({type:'boss-damage',enemy:e})}else{this.kill(e,{spell:true});kills++}}
+ for(const e of [...this.enemies]){if(e.boss){const damage=Math.ceil(e.maxHp/2);e.hp=Math.max(0,e.hp-damage);bossDamage+=damage;if(!e.hp){this.kill(e,{spell:true});kills++}else this.onEvent({type:'boss-damage',enemy:e,damage})}else{this.kill(e,{spell:true});kills++}}
  this.spawnClock=this.speed.spawn/this.multiplier-1.5;return{type:'nova',kills,bossDamage};
 }
 finish(reason='quit'){if(this.over)return;this.over=true;this.onEvent({type:'end',reason})}
@@ -133,6 +153,8 @@ peek(text,enemies,words,{final=false,stable=false,lettersOnly=false}={}){return 
 commit(matches){for(const m of matches){this.consumed.add(`answer:${m.occurrence}`);this.consumed.add(`source:${m.source}`)}}
 take(text,enemies,words,options){const matches=this.peek(text,enemies,words,options);this.commit(matches);return matches;}
 }
-function typingPlan(value,enemies){const raw=String(value).trim(),answer=norm(raw);if(!answer)return{delay:null,reason:'empty'};const eligible=enemies.filter(e=>e.q.kind!=='numbers'||/^\d+$/.test(raw));const variants=eligible.flatMap(e=>answersFor(e.q));const exact=variants.includes(answer),longer=variants.some(v=>v.startsWith(answer)&&v.length>answer.length);if(exact)return{delay:longer?220:0,reason:longer?'ambiguous-prefix':'complete'};if(longer)return{delay:null,reason:'incomplete'};return{delay:180,reason:'check-partial'};}
-root.InkEngine={SurvivalEngine,MONSTERS,SKILLS,answersFor,SPEEDS,VOICE_SPEEDS,paceFor,norm,speechMatches,speechUnits,SpeechLedger,typingPlan};if(typeof module!=='undefined')module.exports=root.InkEngine;
+// Complete answers fire at once; these are the only waits (ms): a complete answer that could still grow, and a partial check.
+const TYPING_WAITS={prefix:160,partial:120};
+function typingPlan(value,enemies){const raw=String(value).trim(),answer=norm(raw);if(!answer)return{delay:null,reason:'empty'};const eligible=enemies.filter(e=>e.q.kind!=='numbers'||/^\d+$/.test(raw));const variants=eligible.flatMap(e=>answersFor(e.q));const exact=variants.includes(answer),longer=variants.some(v=>v.startsWith(answer)&&v.length>answer.length);if(exact)return{delay:longer?TYPING_WAITS.prefix:0,reason:longer?'ambiguous-prefix':'complete'};if(longer)return{delay:null,reason:'incomplete'};return{delay:TYPING_WAITS.partial,reason:'check-partial'};}
+root.InkEngine={SurvivalEngine,MONSTERS,BOSS_ORDER,bossFor,paceOf,SKILLS,answersFor,SPEEDS,VOICE_SPEEDS,paceFor,norm,speechMatches,speechUnits,SpeechLedger,typingPlan,TYPING_WAITS};if(typeof module!=='undefined')module.exports=root.InkEngine;
 })(typeof window!=='undefined'?window:globalThis);

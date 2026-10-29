@@ -10,16 +10,27 @@ Choose 2 minutes, 5 minutes, or Endless. Type number words as digits; letters an
 
 ## Monsters and progression
 
+Every monster carries its own sign: the target box sits on the monster's body, gripped by two paws, and the monster's position is anchored to that box. A slow boss's target is therefore readable the moment it enters the arena instead of trailing far above it.
+
 | Monster | HP | Relative movement | Behaviour |
 | --- | ---: | ---: | --- |
 | Ghost | 1 | 1× | First enemies; one complete answer defeats one. |
-| Bat | 1 | 1.32× | Faster enemies begin at wave 2. |
-| Stone Golem | 3 | 0.72× | Armour begins at wave 3; each correct hit reveals a fresh question. |
-| Vampire | 2 | 1.08× | Appears from wave 4, requiring two questions. |
-| Life Spirit | 1 | 0.85× | Occasional heart carrier from wave 2; grants one heart on defeat. |
-| Ink Colossus | 12 | 0.22× | Slow full-width boss, scheduled from wave 4 and every fourth wave thereafter. |
+| Bat | 1 | 1.5× | Fast tier from wave 2. Swerves into the free lane to pass slower monsters. |
+| Stone Golem | 3 | 0.62× | Slow armoured tier from wave 3; each correct hit reveals a fresh question. |
+| Vampire | 2 | 1.05× → 1.52× | From wave 4. Flees faster once wounded. |
+| Life Spirit | 1 | 0.8× | Occasional heart carrier from wave 2; grants one heart on defeat. |
+| Ember Sprite | 1 | 0.5× → 1.8× | From wave 5. Starts slowly and accelerates as it falls. |
 
-Players start with **two hearts**, with a maximum of five. Every escaped monster costs one. A Life Spirit defeated by a spell can also grant a heart. Monsters share lanes and cannot pass through each other; the boss reserves both lanes. Spawns wait for enough label space, and boss arrivals reserve the next clear opportunity so they cannot be starved by the ordinary stream.
+Four bosses rotate, one every fourth wave, each with its own theme music. After a full rotation each boss returns with two more HP.
+
+| Boss | HP | Relative movement | Twist |
+| --- | ---: | ---: | --- |
+| The Ink Colossus | 12 | 0.22× | Slow stone titan. |
+| The Night Harpy | 7 | 0.5× | A quick boss: fewer answers, less time. |
+| The Bone Weaver | 10 | 0.28× → 0.45× | Scuttles faster once down to three HP. |
+| The Deep Kraken | 15 | 0.2× | Ordinary monsters arrive 25% faster while it lives. |
+
+Players start with **two hearts**, with a maximum of five. Every escaped monster costs one. A Life Spirit defeated by a spell can also grant a heart. Bosses live on their own centre layer behind the swarm: they never hold up ordinary monsters and never block spawning. Within a lane, ordinary monsters keep a readable gap; a clearly faster monster (at least 15% faster than the one in front) swerves into the other lane when it is free, at most once every two seconds. New arrivals prefer the lane whose nearest monster will not slow them down.
 
 Waves last 20 seconds. With question progression enabled, levels 1, 2 and 3 unlock at 0, 40 and 80 seconds, within the selected number / word ceiling. Harder unlocked questions are favoured while some easier ones remain. Progression can be disabled in Fine-tune. Multi-hit enemies keep their body and position, reset partial letter marks, lose HP and reveal a different prompt after every surviving hit. If a tiny custom pool has no unused prompt, a different prompt already on another monster can be reused; add more words for variety.
 
@@ -33,9 +44,15 @@ Each **answer-earned kill** adds one mana, up to ten. Partial answers and non-le
 | Frostlock | 4 | Movement and arrivals freeze for 4 seconds. The match clock continues. |
 | Twin Strike | 5 | The next four completed answers deal two HP each. Misses do not consume a charge. |
 | Chain Lightning | 6 | The next four completed answers also deal one HP to one nearby monster. No recursive chaining. |
-| Inkstorm | 10 | Defeats ordinary visible monsters, removes six boss HP, and gives a 1.5-second arrival breather. Space is a physical-keyboard shortcut when fully charged. |
+| Inkstorm | 10 | Defeats ordinary visible monsters, removes half of a boss's HP, and gives a 1.5-second arrival breather. Space is a physical-keyboard shortcut when fully charged. |
 
-Twin Strike and Chain Lightning can coexist if enough mana is earned. Secondary lightning kills count as answer-earned kills. Charging the primary answer cannot jump to a newly spawned replacement: neighbours are selected before damage. Powered hits can reduce the number of answers needed against a boss; a boss has twelve HP and needs twelve ordinary hits. Skills cannot be recast while their existing timed effect / charges remain active. Pause hides skill controls and the game keyboard to leave room for pause / audio controls. Skill timers also pause during browser focus loss or microphone reconnection.
+Twin Strike and Chain Lightning can coexist if enough mana is earned. Secondary lightning kills count as answer-earned kills. Charging the primary answer cannot jump to a newly spawned replacement: neighbours are selected before damage. Powered hits can reduce the number of answers needed against a boss. Skills cannot be recast while their existing timed effect / charges remain active. Pause hides skill controls and the game keyboard to leave room for pause / audio controls. Skill timers also pause during browser focus loss or microphone reconnection.
+
+## Music that escalates with the swarm
+
+There are three original synthesized swarm tracks and four boss themes, all generated locally; no audio files or licensed recordings are downloaded. *Dawn Patrol* plays for waves 1–3, *Swarm Season* from wave 4 and *Ink Frenzy* from wave 8, each with a denser drum pattern and a higher base tempo than the last. Track changes land on the next bar with a short riser so the groove never stutters. When a boss enters, its own theme takes over (*Stone March*, *Night Wings*, *Web of Bones*, *Deep Current*) after a drum sting, and the swarm track returns when it is defeated. On top of that, tempo follows the actual monster travel speed, including mode and wave acceleration, from 66 to 172 BPM.
+
+Music and effects have separate toggles, plus a music volume control in Pause. Music starts only after a user action, pauses with play and strongly ducks in Speak mode. Headphones or muting music may further improve microphone recognition.
 
 ## Question bank and personal lists
 
@@ -64,7 +81,7 @@ The browser's SpeechRecognition / webkitSpeechRecognition service supplies trans
 
 Stable interim speech can fire without waiting for a sentence-final result. The matcher parses several complete answers from one transcript, keeps compound / comma-formatted numbers atomic, recognises a small explicit number-homophone set, evaluates up to five alternatives, and guards against repeated interim / final attacks. Explicit uppercase acronym expansion is limited to letter practice. Question revisions are checked when a spoken batch targets multi-hit monsters, so an earlier answer cannot attack a replacement prompt. Actual recognition speed and accuracy still depend on the browser service, connection, speaker and environment.
 
-Voice mode retains slower travel, fewer targets, a 1.4-second grace at the danger line, and frozen movement / match time during microphone reconnection. A cleared voice swarm waits briefly before another arrival. Unmatched typed entries clear after **one second of inactivity**, measured from the last edit. Valid prefixes of a live answer remain, so “9” is protected when “98” is approaching. Each edit restarts the timer; pausing cancels it. Type uses immediate complete answers, a 220 ms guard for active answer prefixes, and protected input-method composition. Partial character matches can chip one HP; each matching position is counted once per question.
+Voice mode retains slower travel, fewer targets, a 1.4-second grace at the danger line, and frozen movement / match time during microphone reconnection. A cleared voice swarm waits briefly before another arrival. Unmatched typed entries clear after **one second of inactivity**, measured from the last edit. Valid prefixes of a live answer remain, so “9” is protected when “98” is approaching. Each edit restarts the timer; pausing cancels it. Type uses immediate complete answers, a 160 ms guard for active answer prefixes, and protected input-method composition. Partial character matches can chip one HP; each matching position is counted once per question.
 
 ## Editing and verification
 
