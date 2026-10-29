@@ -29,7 +29,7 @@ function paceOf(e){const a=MONSTERS[e.type]||MONSTERS.wisp;let speed=a.speed;if(
 class SurvivalEngine{
 constructor({pool,speed='steady',duration=300,control='type',initial=null,progressive=true,rng=Math.random,onEvent=()=>{}}){
  if(!pool?.length)throw Error('A question pool is required.');
- Object.assign(this,{pool,control,duration,rng,onEvent,progressive});this.speed=paceFor(speed,control);this.maxLevel=Math.min(3,Math.max(...pool.map(q=>Number(q.level)||1)));this.voiceReady=true;
+ Object.assign(this,{pool,control,duration,rng,onEvent,progressive});this.speed=paceFor(speed,control);this.travelScale=1;this.maxLevel=Math.min(3,Math.max(...pool.map(q=>Number(q.level)||1)));this.voiceReady=true;
  this.enemies=[];this.elapsed=0;this.spawnClock=0;this.score=0;this.combo=0;this.bestCombo=0;this.kills=0;this.hits=0;this.bossKills=0;this.lives=2;this.maxLives=5;this.mana=0;this.maxMana=10;this.serial=0;this.lastBossStage=0;this.freezeUntil=0;this.slowUntil=0;this.doubleCharges=0;this.chainCharges=0;
  this.baseSpacing=pool.some(q=>(q.display||q.prompt||'').length>40)?.42:.3;this.spacing=this.baseSpacing;this.over=false;this.review=[];this.recent=[];
  this.spawn(.22,{type:'wisp'});for(let i=1;i<(initial??(control==='voice'?1:2));i++)this.spawn(.12-(i-1)*.1,{type:'wisp'});
@@ -38,6 +38,9 @@ get wave(){return 1+Math.floor(this.elapsed/20)}
 get level(){return this.progressive?Math.min(this.maxLevel,1+Math.floor((this.wave-1)/2)):this.maxLevel}
 get multiplier(){return Math.min(this.control==='voice'?1.4:2,1+(this.wave-1)*(this.control==='voice'?.06:.1))}
 get boss(){return this.enemies.find(e=>e.boss)||null}
+// Effective travel time. Short arenas (phones with browser bars) grant up to 35% more time so reaction room matches a tall screen.
+get travel(){return this.speed.travel*this.travelScale}
+setArenaHeight(px){this.travelScale=Number.isFinite(px)&&px>0?Math.max(1,Math.min(1.35,520/px)):1;return this.travelScale}
 questionFor(exclude=[],allowUsed=false){
  const active=new Set([...this.enemies.map(e=>norm(e.q.answer)),...exclude.map(norm)]),eligible=this.pool.filter(q=>!this.progressive||(q.level||1)<=this.level);
  const base=eligible.length?eligible:this.pool;
@@ -62,7 +65,7 @@ spawn(y=-.12,{type=null}={}){
 update(dt){
  if(this.over||!Number.isFinite(dt)||dt<=0||(this.control==='voice'&&!this.voiceReady))return;const before=this.elapsed;this.elapsed+=dt;const motionDt=Math.max(0,this.elapsed-Math.max(before,this.freezeUntil)),slow=this.elapsed<this.slowUntil?.45:1;
  const ordered=[...this.enemies].sort((a,b)=>b.y-a.y),moved=[];
- for(const e of ordered){const pace=paceOf(e);e.speed=pace;e.y+=motionDt/this.speed.travel*this.multiplier*pace*slow;
+ for(const e of ordered){const pace=paceOf(e);e.speed=pace;e.y+=motionDt/this.travel*this.multiplier*pace*slow;
   if(!e.boss){let blocker=null;for(const front of moved)if(motionDt&&!front.boss&&front.lane===e.lane&&e.y>front.y-this.spacing){blocker=front;e.y=Math.min(e.y,front.y-this.spacing)}
    // A clearly faster monster swerves into the free lane instead of queueing behind a slow one.
    if(blocker&&pace>paceOf(blocker)*1.15&&this.elapsed-e.switched>2&&!this.laneBlocked(1-e.lane,e.y,e)){e.lane=1-e.lane;e.switched=this.elapsed;this.onEvent({type:'swerve',enemy:e})}}

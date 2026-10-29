@@ -32,6 +32,8 @@ Four bosses rotate, one every fourth wave, each with its own theme music. After 
 
 Players start with **two hearts**, with a maximum of five. Every escaped monster costs one. A Life Spirit defeated by a spell can also grant a heart. Bosses live on their own centre layer behind the swarm: they never hold up ordinary monsters and never block spawning. Within a lane, ordinary monsters keep a readable gap; a clearly faster monster (at least 15% faster than the one in front) swerves into the other lane when it is free, at most once every two seconds. New arrivals prefer the lane whose nearest monster will not slow them down.
 
+On a short arena (under 520 px tall, typically a phone with browser bars showing) monsters receive up to 35% more travel time, so reaction room matches a tall screen. The HUD and footer also switch to a compact layout on short viewports, and the page can be added to the Home Screen (iOS: Share → Add to Home Screen; Android: Install app) to run without browser bars; `manifest.webmanifest` and the PNG icons support this.
+
 Waves last 20 seconds. With question progression enabled, levels 1, 2 and 3 unlock at 0, 40 and 80 seconds, within the selected number / word ceiling. Harder unlocked questions are favoured while some easier ones remain. Progression can be disabled in Fine-tune. Multi-hit enemies keep their body and position, reset partial letter marks, lose HP and reveal a different prompt after every surviving hit. If a tiny custom pool has no unused prompt, a different prompt already on another monster can be reused; add more words for variety.
 
 ## Mana and skills
