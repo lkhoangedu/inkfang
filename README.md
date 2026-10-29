@@ -1,64 +1,81 @@
-# Inkfang · Hold the line
+# Inkfang · Hold the Inklands
 
-A portrait English-learning survival game with **Type** and **Speak** controls.
+A portrait English-learning survival game with Type and Speak controls, compact touchscreen keyboards, and original supernatural monsters. No build step, dependency installation, paid API key, or database is required. Serve `dist/` over HTTPS for classroom use. See [DEPLOY.md](DEPLOY.md) for GitHub Pages, static hosting and embedding.
 
-**Deployment:** see [DEPLOY.md](DEPLOY.md) for GitHub Pages, ordinary static hosting, and microphone-enabled embedding. A GitHub Actions workflow and a working local iframe example are included. Drawing has been retired completely: no handwriting scripts, canvas, controls, or drawing guide assets are shipped.
+## Quick start
 
-## Setup and practice content
+The Play button is immediately visible above the choices. Controls, practice target, pace and run length sit on one screen. Extra settings and instructions are optional; there is no forced wizard, Ready page, or first-run tutorial gate. Choices are remembered in this browser. The default is Type / Numbers / Steady / Endless, with music and effects on. This release applies that profile once; later choices are remembered. Reset to default settings restores it at any time. All choices use visible buttons, without dropdown menus. Music starts after the Play action and can be muted under Audio.
 
-Four short setup steps: Controls → Targets → Pace → Ready. A mode-specific three-screen visual guide sits beside the form (below it on phones). First-time instructions are remembered per control and skill in `inkfang-guide-v4-*`; students can replay them. Thirty captured example-screen images cover all ten supported combinations.
+Choose 2 minutes, 5 minutes, or Endless. Type number words as digits; letters and IPA remain Speak-only. A short Ready / Go transition leads directly into play. Physical keyboards work anywhere inside the active game tab, including after clicking the arena or a skill; there is no need to keep the answer box focused. Text fields in settings retain normal editing. On phones, compact game keys work directly; selecting the device keyboard requires tapping the answer box to open it. Touchscreens default to two-row number keys, three-row letter keys, or letters plus a digit row for Mixed. The device keyboard remains selectable. Device / physical keyboard users should select English and turn off UniKey or Vietnamese input.
 
-The built-in bank has 1,237 targets: all 1,001 integers from 0 to 1000, 26 letter names, 90 vocabulary clues, 90 names / places, and 30 whole-word British English IPA cards. Teachers can search and export JSON/CSV and add/import custom vocabulary or names. Custom questions and best scores remain in local browser storage, with no student accounts or shared reporting.
+## Monsters and progression
 
-Number typing requires digits. Number words and mixed punctuation cannot damage number targets. Single letters and IPA cards are Speak-only. Mixed typing combines numbers and vocabulary; mixed speaking also includes letter names. IPA practice asks the student to say the complete transcribed word, not an isolated phoneme.
+| Monster | HP | Relative movement | Behaviour |
+| --- | ---: | ---: | --- |
+| Ghost | 1 | 1× | First enemies; one complete answer defeats one. |
+| Bat | 1 | 1.32× | Faster enemies begin at wave 2. |
+| Stone Golem | 3 | 0.72× | Armour begins at wave 3; each correct hit reveals a fresh question. |
+| Vampire | 2 | 1.08× | Appears from wave 4, requiring two questions. |
+| Life Spirit | 1 | 0.85× | Occasional heart carrier from wave 2; grants one heart on defeat. |
+| Ink Colossus | 12 | 0.22× | Slow full-width boss, scheduled from wave 4 and every fourth wave thereafter. |
 
-## Faster typing
+Players start with **two hearts**, with a maximum of five. Every escaped monster costs one. A Life Spirit defeated by a spell can also grant a heart. Monsters share lanes and cannot pass through each other; the boss reserves both lanes. Spawns wait for enough label space, and boss arrivals reserve the next clear opportunity so they cannot be starved by the ordinary stream.
 
-Complete, unambiguous answers attack in the input event, with no fixed debounce. If the exact answer could also be a prefix of a longer active target (9 and 98), it waits 220 ms for more characters. Incomplete prefixes do not submit premature misses. Other partial/mistyped answers are checked after 180 ms; Enter remains an immediate shortcut. Input-method composition is respected.
+Waves last 20 seconds. With question progression enabled, levels 1, 2 and 3 unlock at 0, 40 and 80 seconds, within the selected number / word ceiling. Harder unlocked questions are favoured while some easier ones remain. Progression can be disabled in Fine-tune. Multi-hit enemies keep their body and position, reset partial letter marks, lose HP and reveal a different prompt after every surviving hit. If a tiny custom pool has no unused prompt, a different prompt already on another monster can be reused; add more words for variety.
 
-## Speaking without sentence-final delays
+## Mana and skills
 
-The browser's SpeechRecognition / webkitSpeechRecognition service supplies transcripts. The game processes interim updates immediately for completed leading answers in a phrase. A last answer can fire after 180 ms without a changed transcript; an answer that is still a prefix of another active target waits for more speech or a final result. This removes the application's sentence-final wait; it does not control the browser service's own recognition latency.
+Each **answer-earned kill** adds one mana, up to ten. Partial answers and non-lethal hits do not add mana. Spell kills score points and can drop hearts, but do not recharge mana. This prevents self-recharging wipe loops.
 
-The matcher parses several complete answers from one transcript, including sequences such as “sixty-seven seventy-eight ninety-seven”, mixed numbers/words/letter names, and multiword answers such as “ice cream”. Compound numbers are treated atomically, so “one hundred and six” does not attack 1, 100 and 6. Out-of-range and fractional numeric spans do not attack component numbers. The game chooses matching active targets rather than treating a whole transcript as one required answer.
+| Skill | Cost | Effect |
+| --- | ---: | --- |
+| Slowfield | 3 | Movement and arrivals slow to 45% for 7 seconds. |
+| Frostlock | 4 | Movement and arrivals freeze for 4 seconds. The match clock continues. |
+| Twin Strike | 5 | The next four completed answers deal two HP each. Misses do not consume a charge. |
+| Chain Lightning | 6 | The next four completed answers also deal one HP to one nearby monster. No recursive chaining. |
+| Inkstorm | 10 | Defeats ordinary visible monsters, removes six boss HP, and gives a 1.5-second arrival breather. Space is a physical-keyboard shortcut when fully charged. |
 
-Per-utterance ledgers track semantic answer occurrences and their spoken source. Interim revisions, digit-versus-word rewrites, repeated service callbacks and final results cannot replay an already counted attack. Separately spoken repeats remain possible. Alternative transcripts are evaluated as alternatives, not all fired together.
+Twin Strike and Chain Lightning can coexist if enough mana is earned. Secondary lightning kills count as answer-earned kills. Charging the primary answer cannot jump to a newly spawned replacement: neighbours are selected before damage. Powered hits can reduce the number of answers needed against a boss; a boss has twelve HP and needs twelve ordinary hits. Skills cannot be recast while their existing timed effect / charges remain active. Pause hides skill controls and the game keyboard to leave room for pause / audio controls. Skill timers also pause during browser focus loss or microphone reconnection.
 
-Speech mode requests microphone permission before the run, immediately releases the temporary permission stream, and lets the browser manage recognition. No audio is recorded or stored by Inkfang. Some browser providers process audio online. This is recognized-word practice, not a pronunciation or phoneme score. Browser/OS support, network quality, accents, and the speech service still affect speed and accuracy.
+## Question bank and personal lists
 
-References: https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition and https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition/interimResults
+The built-in bank has 1,237 targets: 1,001 integers from 0 to 1000, 26 letter names, 90 vocabulary clues, 90 names / places and 30 whole-word British English IPA cards. JSON and CSV are included in `dist/` and exportable from Question bank.
 
-## Separate pace for Type and Speak
+Answers use a curated bank and explicitly listed alternatives, **not AI semantic grading**. For example, the broad fish clue accepts SHARK, SALMON, TUNA, TROUT and GOLDFISH as well as FISH. Other entries include common synonyms and UK / US variants. Unlisted answers are not automatically judged, so teachers can add alternatives for their own clues. Exact canonical answers take priority when two active targets share an alternative.
 
-| Difficulty | Type: travel / arrival / cap | Speak: travel / arrival / cap |
-| --- | --- | --- |
-| Drift | 22 s / 4.8 s / 5 | 36 s / 7 s / 2 |
-| Steady | 12 s / 2.25 s / 7 | 24 s / 5 s / 3 |
-| Rush | 8 s / 1.45 s / 8 | 18 s / 3.8 s / 3 |
-| Blitz | 5.8 s / 0.95 s / 10 | 14 s / 3 s / 4 |
+Click **+ My lists** and paste up to 500 lines:
 
-Voice starts with one monster and a gentler wave escalation, capped at 1.4× instead of Type's 2×. Every voice monster gets 1.4 seconds at the danger line to absorb recognition delay. During normal microphone reconnection, monsters and the match clock freeze; reconnect attempts start after 100 ms. Service errors pause the game. After a completely cleared voice swarm, the next monster waits 1.2 seconds rather than respawning instantly or leaving the board empty for a full arrival interval.
+```text
+PARIS
+LIBRARY | A place where you borrow books.
+FISH | An animal that swims and has fins. | shark, salmon, tuna
+ice cream
+```
 
-Five hearts; escaped targets cost one. Run for two minutes, three minutes, or until hearts run out. Pause manually or automatically on hidden tabs / lost focus. Readable target labels drive collision spacing. Exact matches defeat, while typing can earn positional partial damage once per character. Scores, combos, best scores, run badges, milestone progress and review cards remain available.
+Plain words become spelling targets. Optional clues create vocabulary targets; the third column lists accepted alternatives separated by commas or semicolons. Tabs can replace pipes. English words / answers are normalised to 1–24 letters, ignoring spaces, apostrophes and hyphens. Invalid lines are reported before the list is saved. Save & use selects the list for the next run; at least two eligible targets are needed. Fine-tune can mix the saved words back into the built-in bank. JSON import / export preserves alternatives. You can also paste a JSON array (or an object with a `questions` array), including a chatbot's fenced JSON response. Vocabulary uses `mode: "vocabulary"`, names use `mode: "spelling"`, and numbers use `mode: "numbers"`. Number answers must be whole-number digit strings from 0 to 1000; number-word prompts are generated by the game so they remain consistent. A personal numbers run uses the saved numbers rather than the built-in range.
 
-## One adaptive background score
+Open **Generate a JSON list with your own chatbot**, select Vocabulary, Names & places, or Numbers, and copy the ready-made prompt. Replace its topic, learner-level and count placeholders in your own chatbot, then paste the returned JSON into the game and review it. No chatbot is contacted by Inkfang. Reusable prompts are also included in `examples/chatbot-prompts.md`. Use **My lists** export in Question bank to move saved questions to another browser.
 
-There is one original synthesized score and no soundtrack chooser. Its tempo follows actual monster travel speed, including mode and wave acceleration: gentler voice swarms get a slower score; fast typing swarms get faster music. Tempo ranges from 72–150 BPM. Locally generated chords, bass, melody and percussion add intensity through the run. No external audio files or licensed recordings are downloaded.
+Custom questions, settings, scores and guide history stay in local browser storage, with no student accounts or shared reporting. Export custom questions before moving to another domain or browser. Paste lists are not sent to a server.
 
-Music and effects have separate toggles, plus a music volume control in Pause. Distinct effects cover arrivals, partial hits, hits, combos, escapes, waves and match outcomes. Music starts only after a user action, pauses with play and strongly ducks in Speak mode. Headphones or muting music may further improve microphone recognition.
+## Speech and answer handling
 
-## Source and checks
+The browser's SpeechRecognition / webkitSpeechRecognition service supplies transcripts. A microphone check before play shows the raw browser transcript separately from hit feedback. No audio is recorded or stored by Inkfang; the provider may process audio online. This is recognized-word practice, not a validated pronunciation assessment.
 
-Static site with no dependencies or build step; serve `dist/` with a static HTTP server. Main modules: `engine.js` (survival rules, voice parsing / ledgers, typing timing), `speech.js` (permission, interim updates and recognition lifecycle), `audio.js` (one adaptive score), `content.js` (question pools), `app.js` (UI / lifecycle), and the guide modules.
+Stable interim speech can fire without waiting for a sentence-final result. The matcher parses several complete answers from one transcript, keeps compound / comma-formatted numbers atomic, recognises a small explicit number-homophone set, evaluates up to five alternatives, and guards against repeated interim / final attacks. Explicit uppercase acronym expansion is limited to letter practice. Question revisions are checked when a spoken batch targets multi-hit monsters, so an earlier answer cannot attack a replacement prompt. Actual recognition speed and accuracy still depend on the browser service, connection, speaker and environment.
 
-Run `node --test tests/*.test.cjs`. The checks cover numeric ranges, digits-only typing, immediate typing/prefix protection, multi-target speech, atomic number parsing, interim/final duplicate prevention, stable-update timing, permission denial, reconnect / stop behavior, voice swarm caps and grace, adaptive music, guide assets and retired-feature absence.
+Voice mode retains slower travel, fewer targets, a 1.4-second grace at the danger line, and frozen movement / match time during microphone reconnection. A cleared voice swarm waits briefly before another arrival. Unmatched typed entries clear after **one second of inactivity**, measured from the last edit. Valid prefixes of a live answer remain, so “9” is protected when “98” is approaching. Each edit restarts the timer; pausing cancels it. Type uses immediate complete answers, a 220 ms guard for active answer prefixes, and protected input-method composition. Partial character matches can chip one HP; each matching position is counted once per question.
 
-Browser QA verified the simplified setup, voice-specific pace descriptions, removal of the song selector, and a complete typed answer increasing the score immediately after filling the field with no wait or Enter. Live microphone recognition still needs device testing; controller callbacks and the complete spoken-batch-to-engine path are exercised with deterministic mocks. Previous portrait viewport checks are retained; physical phones/tablets and microphone provider latency are not verified.
+## Editing and verification
 
-## October 28 speech accuracy and classroom input fixes
+Edit `dist/` directly. Core modules: `engine.js` (battle / matching / powers), `content.js` (pools / alternatives), `personal.js` (list validation / chatbot prompt templates), `choices.js` / `choices.css` (button choices and defaults), `typing.js` (idle reset / physical-key routing), `speech.js` (recognition lifecycle), `keyboard.js` (touch input), `audio.js` (original synthesized adaptive score), `app.js` (UI / lifecycle), and the guide modules. Script / stylesheet URLs are release-versioned to prevent stale mixed versions after deployment.
 
-Confirmed matcher failures: “for” failed to attack 4, “twenty for” attacked 20 rather than 24, and an updated alternative was discarded when the top transcript stayed the same. Regression cases now pass. The number parser keeps provider-formatted “1,000” atomic, rejects decimal/signed spans, and canonicalizes a small explicit homophone set before parsing whole numbers; it does not use broad fuzzy spelling or accept different numbers. Literal vocabulary takes priority over a homophone interpretation. Explicit uppercase letter batches are split only in letter-practice mode. The controller requests up to five alternatives and processes changes to the full suggestion list. Duplicate-attack ledgers still apply.
+Run:
 
-Speak setup now includes a pressure-free microphone check using the game's matcher; the browser transcript is separate from hit feedback. The check stops when leaving setup, changing options, hiding the tab, starting instructions, or starting a match. Type setup, Ready, tutorials, and composition feedback remind students to use an English keyboard and disable UniKey / Vietnamese input.
+```sh
+node --test tests/*.test.cjs
+```
 
-The fixes were reproduced and verified with deterministic transcript fixtures. UI behavior was checked in Microsoft Edge on macOS. Live microphone accuracy for the user's voice is not claimed; no remembered failing utterance was available, and provider recognition still needs real-speaker testing.
+Automated checks cover typing / speech matching, compound numbers, partial and multi-hit damage, stale question revisions, monster unlocks, boss scheduling / HP, heart limits, all five skills, mana costs, no recursive lightning, timed effects, progressive questions, personal-list validation, aliases, quick-start structure, audio and compact keyboards. Browser QA uses the real UI plus a separately hosted, clearly labelled local fixture for boss / skill states; that fixture is excluded from the release. Physical iPhone / iPad / Android tapping ergonomics, long-term difficulty balance, and live speech accuracy still need real-device classroom testing.
+
+The included `scripts/package-release.py OUTPUT_DIRECTORY` creates a complete GitHub deployment kit and a static-files-only ZIP using an explicit allowlist. Site identities, credentials, Git history and local test fixtures are excluded. The GitHub Actions workflow is prepared; publishing to your own repository is a separate step from the ChatGPT-hosted Site.

@@ -66,15 +66,23 @@ Music starts after a student starts a run; browsers do not allow unsolicited bac
 
 Reference: [MDN iframe permissions](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/iframe#allow).
 
+## Update your existing GitHub-hosted copy
+
+This package includes quick start, supernatural monsters, multi-hit bosses, mana skills, progressive questions, personal word lists, and the compact phone / tablet keyboard. Updating the ChatGPT-hosted Site does not update your separate GitHub Pages copy. Replace the files in your repository's `dist/` with the new `dist/` contents, including all new JavaScript and CSS files (especially `choices.js`, `choices.css`, `typing.js`, `personal.js`, `battle.css`, `keyboard.js` and `keyboard.css`), then push to trigger your Pages workflow. If you published the app directly from a branch folder, replace that folder with the contents of the website-files ZIP instead. Wait for Pages deployment to finish, then reload the game.
+
+On a phone or tablet, choose **Type**, then **Fine-tune → Keyboard → Automatic** (the default), or explicitly choose **Compact game keys**. Numbers get a two-row pad; words get letter keys; mixed practice gets both. Students tap answers directly and do not need Space, Enter, or a Cast button. The normal device keyboard remains an option. On a computer or with an external keyboard, type anywhere inside the active game tab, without focusing the answer box. On mobile, tapping compact keys keeps the system keyboard closed; the Device keyboard choice requires tapping the answer box. Unmatched entries clear after one second of inactivity, while valid incomplete answers remain. The default profile is Numbers / Type / Steady / Endless; all settings use buttons. The release applies that profile once, then remembers later changes.
+
+The compact pad avoids opening the system keyboard. It cannot resize the operating system's own keyboard, and browser viewport emulation does not verify every physical iOS / Android device.
+
 ## Classroom setup and speech limits
 
-- Typing: switch to an English keyboard and turn off UniKey / Vietnamese input before playing. The game respects composition, so it cannot attack with text the keyboard has not committed yet. Number answers require digits, not written number words.
+- Typing with a device / physical keyboard: switch to English and turn off UniKey / Vietnamese input before playing. Compact game keys work directly and avoid this composition delay. The game respects composition, so it cannot attack with text the keyboard has not committed yet. Number answers require digits, not written number words.
 - Speaking: choose English UK or US, then use **Check microphone** before a match. Try “four”, “letter B”, and “ninety-eight”. The separate browser transcript shows what the recognition service returned. Headphones help prevent music or other students' voices from entering the microphone.
 - Speak mode needs SpeechRecognition / webkitSpeechRecognition plus microphone access. An unavailable API disables Speak; Type remains available. Microphone permission, the browser service, connectivity, and the speaker's environment still affect accuracy and latency.
 - Inkfang saves no audio. The browser's recognition service may send audio online. Microsoft documents that Edge's Web Speech implementation uses Azure Cognitive Services. No cloud speech account or API key is bundled in this static package.
 - This is recognition-based speaking practice, not a validated pronunciation assessment.
-- Best scores, guide history, and teacher-added questions are saved only in that browser. They do not sync across devices or transfer automatically from the existing Site to a GitHub Pages domain. Export custom questions from Question bank and import them on the new domain.
-- The 1,237 built-in questions ship as JSON/CSV in `dist/`. Fonts load from Google Fonts when online, with system-font fallbacks. Game art, guide images, music generation, and sound effects ship with the app.
+- Best scores, guide history, and teacher-added questions are saved only in that browser. They do not sync across devices or transfer automatically from the existing Site to a GitHub Pages domain. Export My lists from Question bank and import them on the new domain. Vocabulary, names and numbers can be pasted as JSON; copyable chatbot prompts are available in + My lists and in examples/chatbot-prompts.md. Inkfang does not contact a chatbot.
+- The 1,237 built-in questions, including listed alternative answers, ship as JSON/CSV in `dist/`. Fonts load from Google Fonts when online, with system-font fallbacks. Game art, guide images, music generation, and sound effects ship with the app.
 
 References: [Microsoft Edge speech policy](https://learn.microsoft.com/en-us/deployedge/microsoft-edge-policies/SpeechRecognitionEnabled), [MDN SpeechRecognition](https://developer.mozilla.org/en-US/docs/Web/API/SpeechRecognition).
 
@@ -86,4 +94,4 @@ Edit the files in `dist/` directly. There is no build step or package installati
 node --test tests/*.test.cjs
 ```
 
-The regression checks cover number homophones, compound numbers, letter-name batches, alternative transcript revisions, duplicate attack prevention, typing timing, microphone lifecycle, voice pacing, audio, and guide content. They exercise recognition callbacks with fixtures; they do not establish real-world microphone accuracy for every speaker, browser, device, or embedded host. The GitHub workflow has been prepared but has not been run against your own repository.
+The regression checks cover the battle system, all five mana skills, monster and boss HP, progressive questions, custom word lists and alternatives, quick start, plus the existing typing, speech, audio and keyboard behaviour. They exercise recognition callbacks with fixtures; they do not establish real-world microphone accuracy for every speaker, browser, device, or embedded host. The GitHub workflow has been prepared but has not been run against your own repository.
