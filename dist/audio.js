@@ -2,7 +2,7 @@
 (function(root){
 const SCORE={root:38,chords:[[0,3,7],[0,5,8],[-2,2,5],[-5,0,3]],melody:[7,10,12,10,7,5,3,5,7,12,15,12,10,7,5,3]};
 function tempoForTravel(travel){const points=[[5.8,150],[8,136],[12,116],[22,90],[36,72]];if(travel<=points[0][0])return 150;for(let i=1;i<points.length;i++)if(travel<=points[i][0]){const[a,x]=points[i-1],[b,y]=points[i];return x+(y-x)*(travel-a)/(b-a)}return 72;}
-const FX_PATTERNS={spawn:[62,69],chip:[55,62],hit:[72,79,84],combo:[76,79,83,88],escape:[45,40,33],wave:[48,55,60,67],win:[60,64,67,72,76,79],end:[55,51,48,43]};
+const FX_PATTERNS={slow:[60,55,48],freeze:[88,84,79,72],double:[60,72,60,72],chain:[84,91,96,79],heart:[72,76,84,88],nova:[36,48,60,67,72,84],spawn:[62,69],chip:[55,62],hit:[72,79,84],combo:[76,79,83,88],escape:[45,40,33],wave:[48,55,60,67],win:[60,64,67,72,76,79],end:[55,51,48,43]};
 const hz=midi=>440*Math.pow(2,(midi-69)/12);
 class GameAudio{
 constructor(){this.ctx=null;this.musicOn=true;this.effectsOn=true;this.volume=.6;this.duck=false;this.wave=1;this.tick=0;this.playing=false;this.nodes=new Set();this.travel=12;this.bpm=tempoForTravel(12);this.lastHit=0;}
@@ -21,7 +21,7 @@ start(config){if(!this.prepare())return;this.pause();this.configure(config);this
 pause(){this.playing=false;clearInterval(this.interval);for(const node of this.nodes){try{node.stop()}catch{}}this.nodes.clear();}
 resume(){if(!this.prepare()||this.playing)return;this.playing=true;this.nextNote=this.ctx.currentTime+.04;this.schedule();this.interval=setInterval(()=>this.schedule(),90);}
 stop(){this.pause();}
-effect(kind='hit',combo=0){if(!this.effectsOn||!this.prepare())return;const c=this.ctx;let pattern=FX_PATTERNS[kind]||FX_PATTERNS.hit;const transpose=kind==='hit'?(this.lastHit++%3)*2:kind==='combo'?Math.min(7,Math.floor(combo/3)):0;const now=c.currentTime;pattern.forEach((n,i)=>this.note(n+transpose,now+i*(kind==='win'?.12:.055),kind==='end'?.4:.17,.14,kind==='escape'?'sawtooth':'triangle',this.fxBus,kind==='escape'?650:2900));if(kind==='hit')this.noise(now,.055,.13,3500,this.fxBus);if(kind==='combo')this.noise(now,.25,.1,5000,this.fxBus);if(kind==='wave')this.noise(now,.4,.2,2400,this.fxBus);}
+effect(kind='hit',combo=0){if(!this.effectsOn||!this.prepare())return;const c=this.ctx;let pattern=FX_PATTERNS[kind]||FX_PATTERNS.hit;const transpose=kind==='hit'?(this.lastHit++%3)*2:kind==='combo'?Math.min(7,Math.floor(combo/3)):0;const now=c.currentTime;pattern.forEach((n,i)=>this.note(n+transpose,now+i*(kind==='win'?.12:.055),kind==='end'?.4:.17,.14,kind==='escape'?'sawtooth':'triangle',this.fxBus,kind==='escape'?650:2900));if(kind==='hit')this.noise(now,.055,.13,3500,this.fxBus);if(kind==='combo')this.noise(now,.25,.1,5000,this.fxBus);if(kind==='nova')this.noise(now,.8,.3,1800,this.fxBus);if(kind==='wave')this.noise(now,.4,.2,2400,this.fxBus);}
 }
 root.InkAudio={GameAudio,SCORE,tempoForTravel,FX_PATTERNS};if(typeof module!=='undefined')module.exports={GameAudio,SCORE,tempoForTravel,FX_PATTERNS};
 })(typeof window!=='undefined'?window:globalThis);

@@ -4,21 +4,107 @@ const SPEEDS={drift:{name:'Drift',travel:22,spawn:4.8,cap:5},steady:{name:'Stead
 const VOICE_SPEEDS={drift:{name:'Drift',travel:36,spawn:7,cap:2},steady:{name:'Steady',travel:24,spawn:5,cap:3},rush:{name:'Rush',travel:18,spawn:3.8,cap:3},blitz:{name:'Blitz',travel:14,spawn:3,cap:4}};
 const paceFor=(speed='steady',control='type')=>({...((control==='voice'?VOICE_SPEEDS:SPEEDS)[speed]||(control==='voice'?VOICE_SPEEDS:SPEEDS).steady)});
 const norm=s=>String(s).toUpperCase().replace(/[^A-Z0-9]/g,'');
+const MONSTERS={
+ wisp:{name:'Ghost',hp:1,speed:1,points:10,symbol:'ink-wisp'},
+ scout:{name:'Bat',hp:1,speed:1.32,points:14,symbol:'ink-scout'},
+ brute:{name:'Stone Golem',hp:3,speed:.72,points:28,symbol:'ink-brute'},
+ shade:{name:'Vampire',hp:2,speed:1.08,points:22,symbol:'ink-shade'},
+ healer:{name:'Life Spirit',hp:1,speed:.85,points:12,symbol:'ink-healer'},
+ boss:{name:'The Ink Colossus',hp:12,speed:.22,points:180,symbol:'ink-boss'}
+};
+const SKILLS={slow:{name:'Slowfield',cost:3,duration:7},freeze:{name:'Frostlock',cost:4,duration:4},double:{name:'Twin Strike',cost:5,charges:4},chain:{name:'Chain Lightning',cost:6,charges:4},nova:{name:'Inkstorm',cost:10}};
+const answersFor=q=>[...new Set([q.answer,...(q.acceptedAnswers||[])].map(norm).filter(Boolean))];
 class SurvivalEngine{
-constructor({pool,speed='steady',duration=120,control='type',initial=null,rng=Math.random,onEvent=()=>{}}){if(!pool?.length)throw Error('A question pool is required.');this.pool=pool;this.control=control;this.speed=paceFor(speed,control);this.voiceReady=true;this.duration=duration;this.rng=rng;this.onEvent=onEvent;this.enemies=[];this.elapsed=0;this.spawnClock=0;this.score=0;this.combo=0;this.bestCombo=0;this.kills=0;this.lives=5;this.serial=0;this.baseSpacing=pool.some(q=>(q.display||q.prompt).length>40)?.42:.3;this.spacing=this.baseSpacing;this.over=false;this.review=[];this.recent=[];this.spawn(.22);for(let i=1;i<(initial??(control==='voice'?1:2));i++)this.spawn(.12-(i-1)*.1);}
+constructor({pool,speed='steady',duration=300,control='type',initial=null,progressive=true,rng=Math.random,onEvent=()=>{}}){
+ if(!pool?.length)throw Error('A question pool is required.');
+ Object.assign(this,{pool,control,duration,rng,onEvent,progressive});this.speed=paceFor(speed,control);this.maxLevel=Math.min(3,Math.max(...pool.map(q=>Number(q.level)||1)));this.voiceReady=true;
+ this.enemies=[];this.elapsed=0;this.spawnClock=0;this.score=0;this.combo=0;this.bestCombo=0;this.kills=0;this.hits=0;this.bossKills=0;this.lives=2;this.maxLives=5;this.mana=0;this.maxMana=10;this.serial=0;this.lastBossStage=0;this.freezeUntil=0;this.slowUntil=0;this.doubleCharges=0;this.chainCharges=0;
+ this.baseSpacing=pool.some(q=>(q.display||q.prompt||'').length>40)?.42:.3;this.spacing=this.baseSpacing;this.over=false;this.review=[];this.recent=[];
+ this.spawn(.22,{type:'wisp'});for(let i=1;i<(initial??(control==='voice'?1:2));i++)this.spawn(.12-(i-1)*.1,{type:'wisp'});
+}
 get wave(){return 1+Math.floor(this.elapsed/20)}
+get level(){return this.progressive?Math.min(this.maxLevel,1+Math.floor((this.wave-1)/2)):this.maxLevel}
 get multiplier(){return Math.min(this.control==='voice'?1.4:2,1+(this.wave-1)*(this.control==='voice'?.06:.1))}
-spawn(y=-.12){if(this.enemies.length>=this.speed.cap)return false;const active=new Set(this.enemies.map(e=>norm(e.q.answer)));const candidates=this.pool.filter(q=>!active.has(norm(q.answer))&&!this.recent.includes(q.id));const options=candidates.length?candidates:this.pool.filter(q=>!active.has(norm(q.answer)));if(!options.length)return false;const kinds=[...new Set(options.map(q=>q.kind))];const kind=kinds[Math.floor(this.rng()*kinds.length)];const sameKind=options.filter(q=>q.kind===kind);const q=sameKind[Math.floor(this.rng()*sameKind.length)];const laneCounts=[0,1].map(l=>this.enemies.filter(e=>e.lane===l&&e.y<.22).length);const preferred=laneCounts[0]===laneCounts[1]?(this.serial%2):laneCounts.indexOf(Math.min(...laneCounts));const freeLane=[preferred,1-preferred].find(l=>!this.enemies.some(e=>e.lane===l&&Math.abs(e.y-y)<this.spacing));if(freeLane===undefined)return false;const lane=freeLane;this.recent.push(q.id);if(this.recent.length>Math.min(16,Math.floor(this.pool.length/2)))this.recent.shift();const enemy={id:++this.serial,q,lane,y,locked:new Set(),damage:0};this.enemies.push(enemy);this.onEvent({type:'spawn',enemy});return enemy;}
-update(dt){if(this.over||!Number.isFinite(dt)||dt<=0||(this.control==='voice'&&!this.voiceReady))return;this.elapsed+=dt;for(const e of [...this.enemies]){e.y+=dt/this.speed.travel*this.multiplier;if(e.y>=.91){if(this.control==='voice'){e.y=.91;e.lineWait=(e.lineWait||0)+dt;if(e.lineWait<1.4)continue}this.enemies=this.enemies.filter(m=>m!==e);this.lives--;this.combo=0;this.review.push({...e.q,outcome:'escaped'});this.onEvent({type:'escape',enemy:e});if(this.lives<=0){this.finish('hearts');return}}}this.spawnClock+=dt;const interval=this.speed.spawn/this.multiplier;if(this.spawnClock>=interval){this.spawnClock=this.spawn()?0:Math.max(0,interval-.2)}if(this.duration&&this.elapsed>=this.duration)this.finish('time');}
-submit(value,{partial=true,targetId=null}={}){if(this.over)return{type:'ignored'};const raw=String(value).trim();const numeric=/^\d+$/.test(raw);const answer=norm(raw);if(!answer)return{type:'empty'};const threats=[...this.enemies].sort((a,b)=>b.y-a.y);const exact=threats.find(e=>norm(e.q.answer)===answer&&(e.q.kind!=='numbers'||numeric)&&(targetId===null||e.id===targetId));if(exact){this.enemies=this.enemies.filter(e=>e!==exact);this.kills++;this.combo++;this.bestCombo=Math.max(this.bestCombo,this.combo);const points=10+Math.min(this.combo-1,10)*2;this.score+=points;if(exact.damage)this.review.push({...exact.q,outcome:'recovered'});this.onEvent({type:'kill',enemy:exact,points});if(!this.enemies.length){if(this.control==='voice')this.spawnClock=Math.max(0,this.speed.spawn/this.multiplier-1.2);else this.spawn(.12)}else if(this.control!=='voice')this.spawnClock=Math.max(this.spawnClock,this.speed.spawn/this.multiplier*.65);return{type:'kill',enemy:exact,points};}if(partial){const candidates=threats.filter(e=>norm(e.q.answer).length===answer.length&&answer.length>1&&(e.q.kind!=='numbers'||numeric)).map(e=>{const target=norm(e.q.answer);const positions=[];for(let i=0;i<target.length;i++)if(answer[i]===target[i]&&!e.locked.has(i))positions.push(i);return{e,positions}}).filter(c=>c.positions.length).sort((a,b)=>b.positions.length-a.positions.length||b.e.y-a.e.y);if(candidates.length){const{e,positions}=candidates[0];positions.forEach(i=>e.locked.add(i));e.damage=e.locked.size/norm(e.q.answer).length;if(e.locked.size===norm(e.q.answer).length)return this.submit(e.q.answer,{partial:false});this.combo=0;this.onEvent({type:'partial',enemy:e,positions});return{type:'partial',enemy:e,positions};}}this.combo=0;this.onEvent({type:'miss',answer});return{type:'miss'};}
-finish(reason='quit'){if(this.over)return;this.over=true;this.onEvent({type:'end',reason});}
+questionFor(exclude=[],allowUsed=false){
+ const active=new Set([...this.enemies.map(e=>norm(e.q.answer)),...exclude.map(norm)]),eligible=this.pool.filter(q=>!this.progressive||(q.level||1)<=this.level);
+ const base=eligible.length?eligible:this.pool;
+ let options=base.filter(q=>!active.has(norm(q.answer))&&!this.recent.includes(q.id));if(!options.length)options=base.filter(q=>!active.has(norm(q.answer)));if(!options.length&&allowUsed)options=base.filter(q=>!exclude.map(norm).includes(norm(q.answer)));if(!options.length&&allowUsed)options=this.pool.filter(q=>!exclude.map(norm).includes(norm(q.answer)));if(!options.length)return null;
+ const highest=Math.max(...options.map(q=>q.level||1));if(highest>1&&this.rng()<.65)options=options.filter(q=>(q.level||1)===highest);
+ const kinds=[...new Set(options.map(q=>q.kind))],kind=kinds[Math.floor(this.rng()*kinds.length)];const same=options.filter(q=>q.kind===kind);return same[Math.floor(this.rng()*same.length)];
+}
+remember(q){this.recent.push(q.id);if(this.recent.length>Math.min(16,Math.floor(this.pool.length/2)))this.recent.shift()}
+nextType(){if(this.wave>=2&&(this.serial+1)%9===0&&!this.enemies.some(e=>e.type==='healer'))return'healer';const roll=this.rng();if(this.wave>=4&&roll<.2)return'shade';if(this.wave>=3&&roll<.5)return'brute';if(this.wave>=2&&roll<.45)return'scout';return'wisp'}
+spawn(y=-.12,{type=null}={}){
+ if(this.enemies.length>=this.speed.cap)return false;type=type||this.nextType();const archetype=MONSTERS[type]||MONSTERS.wisp;
+ const q=this.questionFor();if(!q)return false;
+ const counts=[0,1].map(l=>this.enemies.filter(e=>e.lane===l&&e.y<.22).length),preferred=counts[0]===counts[1]?this.serial%2:counts.indexOf(Math.min(...counts));
+ const collides=l=>this.enemies.some(e=>(e.lane===l||e.type==='boss'||type==='boss')&&Math.abs(e.y-y)<this.spacing);
+ const lane=type==='boss'?(!collides(2)?2:undefined):[preferred,1-preferred].find(l=>!collides(l));if(lane===undefined)return false;
+ const enemy={id:++this.serial,q,type,lane,y,hp:archetype.hp,maxHp:archetype.hp,speed:archetype.speed,revision:0,locked:new Set(),damage:0};this.remember(q);this.enemies.push(enemy);this.onEvent({type:'spawn',enemy});return enemy;
+}
+update(dt){
+ if(this.over||!Number.isFinite(dt)||dt<=0||(this.control==='voice'&&!this.voiceReady))return;const before=this.elapsed;this.elapsed+=dt;const motionDt=Math.max(0,this.elapsed-Math.max(before,this.freezeUntil)),slow=this.elapsed<this.slowUntil?.45:1;
+ const ordered=[...this.enemies].sort((a,b)=>b.y-a.y),moved=[];
+ for(const e of ordered){e.y+=motionDt/this.speed.travel*this.multiplier*e.speed*slow;
+  for(const front of moved)if(motionDt&&(front.lane===e.lane||front.type==='boss'||e.type==='boss'))e.y=Math.min(e.y,front.y-this.spacing);
+  moved.push(e);
+  if(e.y>=.91){if(!motionDt)continue;if(this.control==='voice'){e.y=.91;e.lineWait=(e.lineWait||0)+motionDt;if(e.lineWait<1.4)continue}this.enemies=this.enemies.filter(m=>m!==e);this.lives--;this.combo=0;this.review.push({...e.q,outcome:'escaped'});this.onEvent({type:'escape',enemy:e});if(this.lives<=0){this.finish('hearts');return}}
+ }
+ const stage=Math.floor(this.wave/4);if(motionDt&&stage>this.lastBossStage&&!this.enemies.some(e=>e.type==='boss')){if(this.spawn(-.2,{type:'boss'}))this.lastBossStage=stage}
+ this.spawnClock+=motionDt*slow;const interval=this.speed.spawn/this.multiplier;if(motionDt&&stage<=this.lastBossStage&&this.spawnClock>=interval)this.spawnClock=this.spawn()?0:Math.max(0,interval-.2);
+ if(this.duration&&this.elapsed>=this.duration)this.finish('time');
+}
+kill(enemy,{spell=false}={}){
+ this.enemies=this.enemies.filter(e=>e!==enemy);this.kills++;this.combo++;this.bestCombo=Math.max(this.bestCombo,this.combo);if(enemy.type==='boss')this.bossKills++;
+ const points=MONSTERS[enemy.type].points+Math.min(this.combo-1,10)*2;this.score+=points;
+ // Only answer-earned kills charge mana, preventing a spell from recharging itself.
+ if(!spell){const before=this.mana;this.mana=Math.min(this.maxMana,this.mana+1);if(this.mana===3&&!this.skillIntro){this.skillIntro=true;this.onEvent({type:'mana-ready',skill:'slow'})}if(before<10&&this.mana===10)this.onEvent({type:'mana-ready',skill:'nova'})}
+ if(enemy.damage)this.review.push({...enemy.q,outcome:'recovered'});
+ if(enemy.type==='healer'){const before=this.lives;this.lives=Math.min(this.maxLives,this.lives+1);this.onEvent({type:'heart',enemy,gained:this.lives-before})}
+ this.onEvent({type:'kill',enemy,points,spell});
+ return{type:'kill',enemy,points};
+}
+refill(){if(!this.enemies.length){if(this.control==='voice')this.spawnClock=Math.max(0,this.speed.spawn/this.multiplier-1.2);else this.spawn(.12)}else if(this.control!=='voice')this.spawnClock=Math.max(this.spawnClock,this.speed.spawn/this.multiplier*.65)}
+dealDamage(enemy,damage){
+ this.hits+=Math.min(damage,enemy.hp);enemy.hp=Math.max(0,enemy.hp-damage);if(!enemy.hp)return this.kill(enemy);
+ const previous=enemy.q;enemy.revision++;enemy.locked=new Set();enemy.damage=0;enemy.lineWait=0;
+ const next=this.questionFor([previous.answer],true);if(next){enemy.q=next;this.remember(next)}
+ this.onEvent({type:'hit',enemy,previous,damage});return{type:'hit',enemy,previous,damage};
+}
+hit(enemy){
+ const damage=this.doubleCharges>0?2:1;if(this.doubleCharges>0)this.doubleCharges--;
+ const charged=this.chainCharges>0;if(charged)this.chainCharges--;
+ const distance=e=>Math.abs(e.y-enemy.y)+(e.lane===enemy.lane?0:.13);
+ const nearby=charged?[...this.enemies].filter(e=>e!==enemy&&distance(e)<=.4).sort((a,b)=>distance(a)-distance(b))[0]:null;
+ const result=this.dealDamage(enemy,damage);
+ if(nearby&&this.enemies.includes(nearby)){this.onEvent({type:'chain',from:enemy,to:nearby});this.dealDamage(nearby,1);result.chainHits=1}
+ this.refill();return result;
+}
+skillReady(name){const skill=SKILLS[name];if(!skill||this.over||this.mana<skill.cost)return false;if(name==='freeze')return this.elapsed>=this.freezeUntil;if(name==='slow')return this.elapsed>=this.slowUntil;if(name==='double')return!this.doubleCharges;if(name==='chain')return!this.chainCharges;return this.enemies.length>0;}
+castSkill(name){if(!this.skillReady(name))return{type:'unavailable'};if(name==='nova')return this.castNova();const skill=SKILLS[name];this.mana-=skill.cost;if(name==='freeze')this.freezeUntil=this.elapsed+skill.duration;if(name==='slow')this.slowUntil=this.elapsed+skill.duration;if(name==='double')this.doubleCharges=skill.charges;if(name==='chain')this.chainCharges=skill.charges;this.onEvent({type:'skill',skill:name});return{type:'skill',skill:name};}
+submit(value,{partial=true,targetId=null,targetRevision=null}={}){
+ if(this.over)return{type:'ignored'};const raw=String(value).trim(),numeric=/^\d+$/.test(raw),answer=norm(raw);if(!answer)return{type:'empty'};
+ const threats=[...this.enemies].sort((a,b)=>b.y-a.y);
+ const matching=threats.filter(e=>answersFor(e.q).includes(answer)&&(e.q.kind!=='numbers'||numeric)&&(targetId===null||e.id===targetId)&&(targetRevision===null||e.revision===targetRevision));
+ matching.sort((a,b)=>Number(norm(b.q.answer)===answer)-Number(norm(a.q.answer)===answer)||b.y-a.y);
+ if(matching.length)return this.hit(matching[0]);
+ if(partial){const candidates=threats.filter(e=>norm(e.q.answer).length===answer.length&&answer.length>1&&(e.q.kind!=='numbers'||numeric)).map(e=>{const positions=[];const target=norm(e.q.answer);for(let i=0;i<target.length;i++)if(answer[i]===target[i]&&!e.locked.has(i))positions.push(i);return{e,positions}}).filter(c=>c.positions.length).sort((a,b)=>b.positions.length-a.positions.length||b.e.y-a.e.y);
+ if(candidates.length){const{e,positions}=candidates[0];positions.forEach(i=>e.locked.add(i));e.damage=e.locked.size/norm(e.q.answer).length;if(e.locked.size===norm(e.q.answer).length)return this.hit(e);this.combo=0;this.onEvent({type:'partial',enemy:e,positions});return{type:'partial',enemy:e,positions}}}
+ this.combo=0;this.onEvent({type:'miss',answer});return{type:'miss'};
+}
+castNova(){
+ if(this.over||this.mana<this.maxMana||!this.enemies.length)return{type:'unavailable'};this.mana=0;let kills=0,bossDamage=0;
+ this.onEvent({type:'nova'});
+ for(const e of [...this.enemies]){if(e.type==='boss'){const damage=Math.ceil(e.maxHp/2);e.hp=Math.max(0,e.hp-damage);bossDamage+=damage;if(!e.hp){this.kill(e,{spell:true});kills++}else this.onEvent({type:'boss-damage',enemy:e})}else{this.kill(e,{spell:true});kills++}}
+ this.spawnClock=this.speed.spawn/this.multiplier-1.5;return{type:'nova',kills,bossDamage};
+}
+finish(reason='quit'){if(this.over)return;this.over=true;this.onEvent({type:'end',reason})}
 }
 const LETTER_SPEECH={a:'A',ay:'A',aye:'A',b:'B',bee:'B',be:'B',c:'C',see:'C',sea:'C',d:'D',dee:'D',e:'E',ee:'E',f:'F',ef:'F',eff:'F',g:'G',gee:'G',h:'H',aitch:'H',haitch:'H',i:'I',eye:'I',j:'J',jay:'J',k:'K',kay:'K',l:'L',el:'L',ell:'L',m:'M',em:'M',n:'N',en:'N',o:'O',oh:'O',p:'P',pee:'P',q:'Q',cue:'Q',queue:'Q',r:'R',are:'R',ar:'R',s:'S',ess:'S',es:'S',t:'T',tea:'T',tee:'T',u:'U',you:'U',v:'V',vee:'V',w:'W',doubleu:'W',doubleyou:'W',x:'X',ex:'X',y:'Y',why:'Y',z:'Z',zee:'Z',zed:'Z'};
 const SMALL={zero:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19};
 // Dictation often chooses these spellings for acoustically identical number names.
 const NUMBER_HOMOPHONES={won:'one',to:'two',too:'two',for:'four',fore:'four',ate:'eight'};
 const TENS={twenty:20,thirty:30,forty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90};
-const FILLER=new Set(['and','then','next','please','number','numbers','letter','letters','word','words','the','say','said']);
 function under100(tokens,i){if(Object.hasOwn(TENS,tokens[i])){let value=TENS[tokens[i]],end=i+1;if(SMALL[tokens[end]]>0&&SMALL[tokens[end]]<10)value+=SMALL[tokens[end++]];return{value,end}}if(Object.hasOwn(SMALL,tokens[i]))return{value:SMALL[tokens[i]],end:i+1};return null;}
 function under1000(tokens,i){const leading=tokens[i]==='a'?1:SMALL[tokens[i]];if(leading>0&&leading<10&&tokens[i+1]==='hundred'){let value=leading*100,end=i+2;const after=under100(tokens,tokens[end]==='and'?end+1:end);if(after){value+=after.value;end=after.end}return{value,end}}return under100(tokens,i);}
 function wholeNumberAt(tokens,i){if(/^\d+(?:\.\d+)?$/.test(tokens[i]))return{value:Number(tokens[i]),end:i+1};const leading=tokens[i]==='a'?1:SMALL[tokens[i]];if(leading>0&&leading<10&&tokens[i+1]==='thousand'){let value=leading*1000,end=i+2;const rest=under1000(tokens,tokens[end]==='and'?end+1:end);if(rest){value+=rest.value;end=rest.end}return{value,end}}return under1000(tokens,i);}
@@ -35,18 +121,18 @@ if(['minus','negative'].includes(token)){const n=numberAt(numeric,i+1);i=n?n.end
 const number=numberAt(numeric,i);
 if(number){units.push({kind:'number',value:number.value,text:tokens.slice(i,number.end).join(' '),key:'N'+number.value});i=number.end;continue}
 if(token==='double'&&['u','you'].includes(tokens[i+1])){units.push({kind:'word',text:'double you',letter:'W',key:'LW'});i+=2;continue}
-if(FILLER.has(token)||/^[,;.!?]$/.test(token)){i++;continue}
+if(/^[,;.!?]$/.test(token)){i++;continue}
 const letter=LETTER_SPEECH[token];units.push({kind:'word',text:token,letter,key:letter?'L'+letter:'W'+norm(token)});i++;
 }
 const counts=new Map();for(const unit of units){unit.occurrence=counts.get(unit.key)||0;counts.set(unit.key,unit.occurrence+1)}return units;
 }
-function speechMatches(transcript,enemies,words,{consumed=new Set(),lettersOnly=false}={}){const units=speechUnits(transcript,{lettersOnly}),threats=[...enemies].sort((a,b)=>(b.y||0)-(a.y||0)),assigned=new Set(),outputs=[];for(let i=0;i<units.length;){const unit=units[i],candidates=[];for(const e of threats){if(assigned.has(e.id))continue;const q=e.q,answer=norm(q.answer);if(q.kind==='numbers'){const hit=unit.kind==='number'?Number.isInteger(unit.value)&&unit.value>=0&&unit.value<=1000&&String(unit.value)===q.answer:['oh','o'].includes(unit.text)&&q.answer==='0';if(hit)candidates.push({e,end:i+1,key:'N'+q.answer});}else if(q.kind==='letters'){if(unit.letter===q.answer)candidates.push({e,end:i+1,key:'L'+q.answer});}else{for(let j=i+1;j<=Math.min(i+4,units.length);j++){const spoken=norm(units.slice(i,j).map(u=>u.text).join(' '));if(spoken===norm(q.spoken||answer))candidates.push({e,end:j,key:'W'+answer,literal:true});}}}candidates.sort((a,b)=>(b.end-i)-(a.end-i)||Number(!!b.literal)-Number(!!a.literal)||(b.e.y||0)-(a.e.y||0));const match=candidates.find(c=>!consumed.has(`answer:${c.key}#${unit.occurrence}`)&&!consumed.has(`source:${unit.key}#${unit.occurrence}`));if(!match){i++;continue}const q=match.e.q,answer=q.answer;let prefixAmbiguous=false;if(q.kind==='numbers'){const current=words(Number(answer)).replace(/\band\b/g,'').replace(/[^a-z0-9]/gi,'').toLowerCase();prefixAmbiguous=threats.some(e=>e.id!==match.e.id&&e.q.kind==='numbers'&&words(Number(e.q.answer)).replace(/\band\b/g,'').replace(/[^a-z0-9]/gi,'').toLowerCase().startsWith(current));}else if(q.kind!=='letters')prefixAmbiguous=threats.some(e=>e.id!==match.e.id&&e.q.kind!=='numbers'&&norm(e.q.spoken||e.q.answer).startsWith(norm(q.spoken||answer)));outputs.push({id:match.e.id,answer,occurrence:`${match.key}#${unit.occurrence}`,source:`${unit.key}#${unit.occurrence}`,closed:match.end<units.length,prefixAmbiguous});assigned.add(match.e.id);i=match.end;}return outputs;}
+function speechMatches(transcript,enemies,words,{consumed=new Set(),lettersOnly=false}={}){const units=speechUnits(transcript,{lettersOnly}),threats=[...enemies].sort((a,b)=>(b.y||0)-(a.y||0)),assigned=new Set(),outputs=[];for(let i=0;i<units.length;){const unit=units[i],candidates=[];for(const e of threats){if(assigned.has(e.id))continue;const q=e.q,answer=norm(q.answer);if(q.kind==='numbers'){const hit=unit.kind==='number'?Number.isInteger(unit.value)&&unit.value>=0&&unit.value<=1000&&String(unit.value)===q.answer:['oh','o'].includes(unit.text)&&q.answer==='0';if(hit)candidates.push({e,end:i+1,key:'N'+q.answer});}else if(q.kind==='letters'){if(unit.letter===q.answer)candidates.push({e,end:i+1,key:'L'+q.answer});}else{for(let j=i+1;j<=Math.min(i+4,units.length);j++){const spoken=norm(units.slice(i,j).map(u=>u.text).join(' '));if([norm(q.spoken||answer),...answersFor(q)].includes(spoken))candidates.push({e,end:j,key:'W'+answer,literal:true,canonical:spoken===norm(q.spoken||answer)});}}}candidates.sort((a,b)=>(b.end-i)-(a.end-i)||Number(!!b.literal)-Number(!!a.literal)||Number(!!b.canonical)-Number(!!a.canonical)||(b.e.y||0)-(a.e.y||0));const match=candidates.find(c=>!consumed.has(`answer:${c.key}#${unit.occurrence}`)&&!consumed.has(`source:${unit.key}#${unit.occurrence}`));if(!match){i++;continue}const q=match.e.q,answer=q.answer;let prefixAmbiguous=false;if(q.kind==='numbers'){const current=words(Number(answer)).replace(/\band\b/g,'').replace(/[^a-z0-9]/gi,'').toLowerCase();prefixAmbiguous=threats.some(e=>e.id!==match.e.id&&e.q.kind==='numbers'&&words(Number(e.q.answer)).replace(/\band\b/g,'').replace(/[^a-z0-9]/gi,'').toLowerCase().startsWith(current));}else if(q.kind!=='letters'){const current=norm(units.slice(i,match.end).map(u=>u.text).join(' '));prefixAmbiguous=threats.some(e=>e.id!==match.e.id&&e.q.kind!=='numbers'&&answersFor(e.q).some(a=>a.length>current.length&&a.startsWith(current)));}outputs.push({id:match.e.id,revision:match.e.revision||0,answer,occurrence:`${match.key}#${unit.occurrence}`,source:`${unit.key}#${unit.occurrence}`,closed:match.end<units.length,prefixAmbiguous});assigned.add(match.e.id);i=match.end;}return outputs;}
 class SpeechLedger{
 constructor(){this.consumed=new Set()}
 peek(text,enemies,words,{final=false,stable=false,lettersOnly=false}={}){return speechMatches(text,enemies,words,{consumed:this.consumed,lettersOnly}).filter(m=>(final||m.closed||(stable&&!m.prefixAmbiguous)))}
 commit(matches){for(const m of matches){this.consumed.add(`answer:${m.occurrence}`);this.consumed.add(`source:${m.source}`)}}
 take(text,enemies,words,options){const matches=this.peek(text,enemies,words,options);this.commit(matches);return matches;}
 }
-function typingPlan(value,enemies){const raw=String(value).trim(),answer=norm(raw);if(!answer)return{delay:null,reason:'empty'};const eligible=enemies.filter(e=>e.q.kind!=='numbers'||/^\d+$/.test(raw));const exact=eligible.some(e=>norm(e.q.answer)===answer);const longer=eligible.some(e=>norm(e.q.answer).startsWith(answer)&&norm(e.q.answer).length>answer.length);if(exact)return{delay:longer?220:0,reason:longer?'ambiguous-prefix':'complete'};if(longer)return{delay:null,reason:'incomplete'};return{delay:180,reason:'check-partial'};}
-root.InkEngine={SurvivalEngine,SPEEDS,VOICE_SPEEDS,paceFor,norm,speechMatches,speechUnits,SpeechLedger,typingPlan};if(typeof module!=='undefined')module.exports=root.InkEngine;
+function typingPlan(value,enemies){const raw=String(value).trim(),answer=norm(raw);if(!answer)return{delay:null,reason:'empty'};const eligible=enemies.filter(e=>e.q.kind!=='numbers'||/^\d+$/.test(raw));const variants=eligible.flatMap(e=>answersFor(e.q));const exact=variants.includes(answer),longer=variants.some(v=>v.startsWith(answer)&&v.length>answer.length);if(exact)return{delay:longer?220:0,reason:longer?'ambiguous-prefix':'complete'};if(longer)return{delay:null,reason:'incomplete'};return{delay:180,reason:'check-partial'};}
+root.InkEngine={SurvivalEngine,MONSTERS,SKILLS,answersFor,SPEEDS,VOICE_SPEEDS,paceFor,norm,speechMatches,speechUnits,SpeechLedger,typingPlan};if(typeof module!=='undefined')module.exports=root.InkEngine;
 })(typeof window!=='undefined'?window:globalThis);
